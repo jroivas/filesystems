@@ -10,7 +10,6 @@ bool FAT::readBootRecord()
 
     res = parseBootRecord(buf);
 
-
     delete[] buf;
 
     return res;
@@ -132,32 +131,38 @@ uint32_t FAT::readFat(uint32_t index)
 
 uint32_t FAT::solveSector(uint32_t relative_cluster)
 {
-    printf("data b: %u\n", m_data_base);
-    if (m_type == 32) {
-        uint32_t absolute_cluster = relative_cluster - 2 + m_data_base;
-        uint32_t sector = absolute_cluster + (m_dir_entries * 32 / m_bytes_per_sector);
-        return sector;
-    } else {
-        return m_data_base + relative_cluster;
+    if (relative_cluster == 0) {
+        return m_data_base;
     }
+    return m_data_base + 32 + (relative_cluster - 2) * m_sectors_per_cluster;
+
+    uint32_t absolute_cluster = relative_cluster + 2 + m_data_base;
+    uint32_t sector = absolute_cluster + (m_dir_entries * 32 / m_bytes_per_sector);
+    return sector;
 
 }
 
-bool FAT::readDir(uint32_t cluster)
+FATInfo *FAT::readDir(uint32_t cluster)
 {
     uint32_t sector = solveSector(cluster);
+    printf("sect: %d %d\n", sector, cluster);
+    if (cluster != 0) {
+        return NULL;
+    }
 
-    printf("sect: %d\n", sector);
     uint8_t *data = new uint8_t[m_phys->sectorSize()];
     if (!m_phys->read(data, 1, sector * m_phys->sectorSize(), 0)) {
         delete[] data;
-        return false;
+        return NULL;
     }
 
     uint8_t *pos = data;
     std::string long_temp = "";
+
+    FATInfo *first_info = NULL;
+    FATInfo *cur_info = NULL;
     for (int i = 0; i < m_dir_entries; ++i) {
-        if (*pos != 0 && *pos != 0xE5) {
+        if (*pos != 0 && *pos != 0xe5) {
             if (*(pos + 11) == 0xf) {
                 for (int dd = 1; dd <= 10; ++dd) {
                     char c = *(pos + dd);
@@ -187,8 +192,15 @@ bool FAT::readDir(uint32_t cluster)
                     long_temp,
                     dataToNum(pos, 11, 1),
                     dataToNum(pos, 28, 4),
-                    dataToNum(pos, 26, 4)
+                    dataToNum(pos, 26, 2)
                     );
+                if (first_info == NULL) {
+                    first_info = info;
+                }
+                if (cur_info != NULL) {
+                    cur_info->m_next = info;
+                }
+                cur_info = info;
                 info->print();
                 printf("\n");
                 long_temp = "";
@@ -198,7 +210,7 @@ bool FAT::readDir(uint32_t cluster)
             ++sector;
             if (!m_phys->read(data, 1, sector * m_phys->sectorSize(), 0)) {
                 delete[] data;
-                return false;
+                return NULL;
             }
             pos = data;
         } else {
@@ -208,14 +220,44 @@ bool FAT::readDir(uint32_t cluster)
 
     delete[] data;
 
-    return true;
+    return first_info;
 }
 
-bool FAT::readRootDir()
+FATInfo *FAT::readRootDir()
 {
     return readDir(0);
 }
 
-bool FAT::readDirWithName(const char *name)
+bool FAT::readFile(FATInfo *info)
 {
+    uint32_t sector = solveSector(info->m_pos);
+
+    uint32_t cnt = info->m_size;
+    info->m_data = new uint8_t[cnt];
+    uint8_t data[512];
+
+    if (!m_phys->read(data, 1, sector * m_phys->sectorSize(), 0)) {
+        return false;
+    }
+    uint32_t pos = 0;
+    uint8_t *dst = info->m_data;
+    while (cnt > 0) {
+        *dst = data[pos];
+        ++dst;
+        --cnt;
+        ++pos;
+        if (pos >= 512) {
+            ++sector;
+            if (!m_phys->read(data, 1, sector * m_phys->sectorSize(), 0)) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+FATInfo *FAT::readDirWithName(const char *name)
+{
+    return NULL;
 }

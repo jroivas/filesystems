@@ -82,7 +82,8 @@ public:
     FATInfo()
         : m_attr(0),
         m_size(0),
-        m_pos(0)
+        m_pos(0),
+        m_next(NULL)
     {
     }
 
@@ -95,7 +96,8 @@ public:
         : m_name(name),
         m_attr(attr),
         m_size(size),
-        m_pos(pos)
+        m_pos(pos),
+        m_next(NULL)
     {
     }
 
@@ -119,6 +121,9 @@ public:
     uint8_t m_attr;
     uint32_t m_size;
     uint32_t m_pos;
+    uint8_t *m_data;
+
+    FATInfo *m_next;
 };
 
 class FAT
@@ -131,9 +136,10 @@ public:
 
     bool readBootRecord();
     uint32_t readFat(uint32_t index);
-    bool readRootDir();
-    bool readDir(uint32_t cluster);
-    bool readDirWithName(const char *name);
+    FATInfo *readRootDir();
+    FATInfo *readDir(uint32_t cluster);
+    FATInfo *readDirWithName(const char *name);
+    bool readFile(FATInfo *info);
 
 protected:
     uint32_t dataToNum(uint8_t *buf, int start, int cnt);
