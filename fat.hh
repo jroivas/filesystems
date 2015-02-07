@@ -23,7 +23,7 @@ public:
         fclose(m_fp);
     }
 
-    virtual bool read(
+    bool read(
         uint8_t *buffer,
         uint32_t sectors,
         uint32_t pos,
@@ -32,19 +32,22 @@ public:
         if (pos >= m_size) {
             return false;
         }
-        int res = fseek(m_fp, pos, SEEK_SET);
 
         for (uint32_t i = 0; i < sectorSize(); ++i) {
             buffer[i] = 0;
         }
 
+        int res = fseek(m_fp, pos, SEEK_SET);
         if (res == 0) {
             res = fread(buffer, 1, sectorSize(), m_fp);
+            if (res != sectorSize()) return false;
+        } else {
+            return false;
         }
         return true;
     }
 
-    virtual bool write(
+    bool write(
         uint8_t *buffer,
         uint32_t sectors,
         uint32_t pos,
@@ -61,12 +64,12 @@ public:
         return true;
     }
 
-    virtual uint32_t size()
+    uint32_t size()
     {
         return m_size;
     }
 
-    virtual uint32_t sectorSize() const
+    inline uint32_t sectorSize() const
     {
         return 512;
     }
