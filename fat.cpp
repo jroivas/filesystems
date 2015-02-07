@@ -26,6 +26,33 @@ uint32_t FAT::dataToNum(uint8_t *buf, int start, int cnt)
     return res;
 }
 
+void FAT::print()
+{
+    printf("Identifier         : %s\n", m_identifier.c_str());
+    printf("Bytes per sector   : %d\n", m_bytes_per_sector);
+    printf("Sectors per cluster: %d\n", m_sectors_per_cluster);
+    printf("Reserved           : %d\n", m_reserved);
+    printf("FATs               : %d\n", m_fats);
+    printf("Directory entries  : %d\n", m_dir_entries);
+    printf("Sectors            : %d\n", m_sectors==0?m_large_sectors:m_sectors);
+    printf("Media type         : %s\n", m_media_desc==0xf8?"Hard disk":"Other");
+    printf("Sectors per FAT    : %d\n", m_sectors_per_fat);
+    printf("Sectors per track  : %d\n", m_sectors_per_track);
+    printf("Heads              : %d\n", m_heads);
+    printf("Hidden             : %d\n", m_hidden);
+    printf("Type               : FAT%d\n", m_type);
+    printf("Fat entries        : %u\n", m_fat_entries);
+
+    if (m_ext) {
+        printf("Label              : %s\n", m_label.c_str());
+        printf("Serial             : ");
+        printf("%X", (m_serial >> 24) & 0xFF);
+        printf("%X-", (m_serial >> 16) & 0xFF);
+        printf("%X", (m_serial >> 8) & 0xFF);
+        printf("%X\n", m_serial & 0xFF);
+    }
+}
+
 bool FAT::parseBootRecord(uint8_t *buf)
 {
     if (!(buf[0] == 0xEB
@@ -52,34 +79,17 @@ bool FAT::parseBootRecord(uint8_t *buf)
     m_hidden = dataToNum(buf, 28, 4);
     m_large_sectors = dataToNum(buf, 32, 4);
 
-
-    printf("Identifier         : %s\n", m_identifier.c_str());
-    printf("Bytes per sector   : %d\n", m_bytes_per_sector);
-    printf("Sectors per cluster: %d\n", m_sectors_per_cluster);
-    printf("Reserved           : %d\n", m_reserved);
-    printf("FATs               : %d\n", m_fats);
-    printf("Directory entries  : %d\n", m_dir_entries);
-    printf("Sectors            : %d\n", m_sectors==0?m_large_sectors:m_sectors);
-    printf("Media type         : %s\n", m_media_desc==0xf8?"Hard disk":"Other");
-    printf("Sectors per FAT    : %d\n", m_sectors_per_fat);
-    printf("Sectors per track  : %d\n", m_sectors_per_track);
-    printf("Heads              : %d\n", m_heads);
-    printf("Hidden             : %d\n", m_hidden);
-
     if (buf[38] == 0x28
         || buf[38] == 0x29) {
         // Extended FAT16 / FAT 12
+        m_ext = true;
         m_serial = dataToNum(buf, 39, 4);
         m_label = "";
         for (int i = 43; i < 43 + 11; ++i) {
             m_label += (const char)buf[i];
         }
-        printf("Label              : %s\n", m_label.c_str());
-        printf("Serial             : ");
-        printf("%X", (m_serial >> 24) & 0xFF);
-        printf("%X-", (m_serial >> 16) & 0xFF);
-        printf("%X", (m_serial >> 8) & 0xFF);
-        printf("%X\n", m_serial & 0xFF);
+    } else {
+        m_ext = false;
     }
     uint32_t root_dir_sectors = (m_dir_entries * 32 + m_bytes_per_sector - 1) / m_bytes_per_sector;
     m_data_base = m_reserved + m_fats * m_sectors_per_fat;
@@ -95,8 +105,6 @@ bool FAT::parseBootRecord(uint8_t *buf)
         m_type = 32;
     }
     m_fat_base = m_vol_base + m_reserved;
-    printf("Type               : FAT%d\n", m_type);
-    printf("Fat entries        : %u\n", m_fat_entries);
 
     return true;
 }
@@ -104,29 +112,6 @@ bool FAT::parseBootRecord(uint8_t *buf)
 uint32_t FAT::sectorSize()
 {
     return 512;
-}
-
-uint32_t FAT::readFat(uint32_t index)
-{
-    uint32_t res = 0xFFFFFFFF;
-
-    if (index <= m_reserved
-        || index >= m_fat_entries) {
-        res = 1;
-    } else {
-        //Assume FAT16
-        uint32_t pos = index / (sectorSize() / 2);
-        uint32_t sector = m_fat_base + pos;
-
-        uint8_t *win = new uint8_t[m_phys->sectorSize()];
-        if (!m_phys->read(win, 1, sector, 0)) return res;
-        //printf("%x %x\n", win[index * 2 % sectorSize()], win[index * 2 % sectorSize()+1]);
-        res = dataToNum(win, index * 2 % sectorSize(), 2);
-
-        //printf("daa: %d %d %u\n", pos, sector, res);
-
-    }
-    return res;
 }
 
 uint32_t FAT::solveSector(uint32_t relative_cluster)
@@ -191,8 +176,6 @@ FATInfo *FAT::readDir(uint32_t cluster)
                     cur_info->m_next = info;
                 }
                 cur_info = info;
-                info->print();
-                printf("\n");
                 long_temp = "";
             }
         }
@@ -238,13 +221,54 @@ bool FAT::readFile(FATInfo *info)
             if (!m_phys->read(data, 1, sector * m_phys->sectorSize(), 0)) {
                 return false;
             }
+            pos = 0;
         }
     }
 
     return true;
 }
 
-FATInfo *FAT::readDirWithName(const char *name)
+std::string FAT::getPartialName(std::string name, int part)
 {
+    std::string res;
+    int current = 1;
+    for (size_t i = 0; i < name.size(); ++i) {
+        if (name[i] != '/') {
+            if (part == current)
+                res += name[i];
+        } else {
+            current += 1;
+        }
+    }
+    return res;
+}
+
+FATInfo *FAT::getItem(const char *name)
+{
+    std::string paths = name;
+    uint32_t curindex = 1;
+    std::string partname = getPartialName(name, curindex);
+
+    FATInfo *main = readRootDir();
+    FATInfo *item = main;
+    while (item != NULL) {
+        if (item->m_name == partname) {
+            if (item->m_attr & FATInfo::T_ARCH) {
+                readFile(item);
+                return item;
+            }
+            else if (item->m_attr & FATInfo::T_DIR) {
+                ++curindex;
+                partname = getPartialName(name, curindex);
+                if (partname.empty()) {
+                    return item;
+                }
+
+                item = readDir(item->m_pos);
+            }
+        }
+        item = item->m_next;
+    }
+
     return NULL;
 }

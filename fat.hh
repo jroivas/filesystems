@@ -40,7 +40,7 @@ public:
         int res = fseek(m_fp, pos, SEEK_SET);
         if (res == 0) {
             res = fread(buffer, 1, sectorSize(), m_fp);
-            if (res != sectorSize()) return false;
+            if (res != (int)sectorSize()) return false;
         } else {
             return false;
         }
@@ -82,10 +82,19 @@ protected:
 class FATInfo
 {
 public:
+    enum {
+        T_RO = 0x1,
+        T_HIDDEN = 0x2,
+        T_SYSTEM = 0x4,
+        T_VOLID = 0x8,
+        T_DIR = 0x10,
+        T_ARCH = 0x20
+    };
     FATInfo()
         : m_attr(0),
         m_size(0),
         m_pos(0),
+        m_data(NULL),
         m_next(NULL)
     {
     }
@@ -100,6 +109,7 @@ public:
         m_attr(attr),
         m_size(size),
         m_pos(pos),
+        m_data(NULL),
         m_next(NULL)
     {
     }
@@ -107,12 +117,12 @@ public:
     void print()
     {
         std::string attr = "";
-        attr += (m_attr & 0x1)?"RO ":"";
-        attr += (m_attr & 0x2)?"HIDDEN ":"";
-        attr += (m_attr & 0x4)?"SYSTEM ":"";
-        attr += (m_attr & 0x8)?"VolID ":"";
-        attr += (m_attr & 0x10)?"DIR ":"";
-        attr += (m_attr & 0x20)?"ARCH":"";
+        attr += (m_attr & T_RO)?"RO ":"";
+        attr += (m_attr & T_HIDDEN)?"HIDDEN ":"";
+        attr += (m_attr & T_SYSTEM)?"SYSTEM ":"";
+        attr += (m_attr & T_VOLID)?"VolID ":"";
+        attr += (m_attr & T_DIR)?"DIR ":"";
+        attr += (m_attr & T_ARCH)?"ARCH":"";
 
         printf("name: %s\n", m_name.c_str());
         printf("size: %u\n", m_size);
@@ -138,13 +148,14 @@ public:
     }
 
     bool readBootRecord();
-    uint32_t readFat(uint32_t index);
     FATInfo *readRootDir();
     FATInfo *readDir(uint32_t cluster);
-    FATInfo *readDirWithName(const char *name);
+    FATInfo *getItem(const char *name);
     bool readFile(FATInfo *info);
+    void print();
 
 protected:
+    std::string getPartialName(std::string name, int part);
     uint32_t dataToNum(uint8_t *buf, int start, int cnt);
     bool parseBootRecord(uint8_t *buf);
     uint32_t sectorSize();
@@ -172,4 +183,5 @@ protected:
     uint32_t m_data_base;
     uint32_t m_fat_entries;
     uint32_t m_type;
+    bool m_ext;
 };
