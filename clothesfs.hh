@@ -91,12 +91,15 @@ public:
         m_phys = phys;
     }
 
+    uint32_t dataToNum(uint8_t *buf, int start, int cnt);
+    void numToData(uint64_t num, uint8_t *buf, int start, int cnt);
     bool detect();
     bool format();
     bool addFile(const char *name, const char *contents, uint32_t size);
 
 protected:
     ClothesPhys *m_phys;
+    uint32_t m_blocksize;
 };
 
 #endif

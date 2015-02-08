@@ -1,14 +1,42 @@
 #include "clothesfs.hh"
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/time.h>
+
+static uint32_t header_begin = 8 * 4;
 
 ClothesFS::ClothesFS()
-    : m_phys(NULL)
+    : m_phys(NULL),
+    m_blocksize(512)
 {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+
+    srand(tv.tv_sec + tv.tv_usec);
 }
 
 ClothesFS::~ClothesFS()
 {
+}
+
+uint32_t ClothesFS::dataToNum(uint8_t *buf, int start, int cnt)
+{
+    uint32_t res = 0;
+    int n = 0;
+    for (int i = start; i < start + cnt; ++i) {
+        res += buf[i] << n;
+        n += 8;
+    }
+    return res;
+}
+
+void ClothesFS::numToData(uint64_t num, uint8_t *buf, int start, int cnt)
+{
+    int n = 0;
+    for (int i = start; i < start + cnt; ++i) {
+        buf[i] = (num >> n) & 0xFF;
+        n += 8;
+    }
 }
 
 bool ClothesFS::detect()
@@ -17,35 +45,43 @@ bool ClothesFS::detect()
         return false;
     }
 
-    char buf[m_phys->sectorSize()];
-    if (!m_phys->read((uint8_t*)buf, 1, 0, 0)) {
+    uint8_t buf[m_phys->sectorSize()];
+    if (!m_phys->read(buf, 1, 0, 0)) {
         return false;
     }
 
+    m_blocksize = dataToNum(buf, header_begin + 4, 2);
+
     return (
-           buf[0] == 0x4
-        && buf[1] == 0x2
-        && buf[2] == 0x24
-        && buf[3] == 'C'
-        && buf[4] == 'L'
-        && buf[5] == 'O'
-        );
+           buf[header_begin + 0] == 0x00
+        && buf[header_begin + 1] == 0x42
+        && buf[header_begin + 2] == 0x00
+        && buf[header_begin + 3] == 0x42);
 }
 
 bool ClothesFS::format()
 {
-    char buf[m_phys->sectorSize()];
+    uint8_t buf[m_phys->sectorSize()];
     for (uint32_t i = 0; i < m_phys->sectorSize(); ++i) {
         buf[i] = 0;
     }
-    buf[0] = 0x4;
-    buf[1] = 0x2;
-    buf[2] = 0x24;
-    buf[3] = 'C';
-    buf[4] = 'L';
-    buf[5] = 'O';
 
-    return m_phys->write((uint8_t*)buf, 1, 0, 0);
+    buf[header_begin + 0] = 0x00;
+    buf[header_begin + 1] = 0x42;
+    buf[header_begin + 2] = 0x00;
+    buf[header_begin + 3] = 0x42;
+
+    numToData(m_blocksize, buf, header_begin + 4, 2);
+
+    //flags
+    buf[header_begin + 6] = 0x0;
+    buf[header_begin + 7] = 0x0;
+
+    for (int i = 8; i < 8 + 8; ++i) {
+        buf[header_begin + i] = rand() % 0xFF;
+    }
+
+    return m_phys->write(buf, 1, 0, 0);
 }
 
 bool ClothesFS::addFile(const char *name, const char *contents, uint32_t size)
