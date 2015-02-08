@@ -26,7 +26,7 @@ int main(int argc, char **argv)
                 --c;
                 ++i;
             }
-            printf("GOT DATA: %s\n", res.c_str());
+            printf("%s", res.c_str());
         } else {
             fat.listDir(item);
         }

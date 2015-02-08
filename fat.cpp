@@ -137,6 +137,7 @@ FATInfo *FAT::readDir(uint32_t cluster)
     FATInfo *first_info = NULL;
     FATInfo *cur_info = NULL;
     for (uint32_t i = 0; i < m_dir_entries; ++i) {
+        if (*pos == 0) break;
         if (*pos != 0 && *pos != 0xe5) {
             if (*(pos + 11) == 0xf) {
                 std::string prev = long_temp;
