@@ -18,7 +18,7 @@ public:
         uint32_t pos,
         uint32_t pos_hi) = 0;
 
-    virtual uint32_t size() = 0;
+    virtual uint64_t size() const = 0;
     virtual uint32_t sectorSize() const = 0;
 };
 
@@ -98,8 +98,14 @@ public:
     bool addFile(const char *name, const char *contents, uint32_t size);
 
 protected:
+    bool formatBlock(uint32_t num, uint32_t next);
+    bool formatBlocks();
+
     ClothesPhys *m_phys;
     uint32_t m_blocksize;
+    uint32_t m_blocks;
+    uint32_t m_freechain;
+    uint32_t m_block_in_sectors;
 };
 
 #endif

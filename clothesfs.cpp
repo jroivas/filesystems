@@ -59,6 +59,39 @@ bool ClothesFS::detect()
         && buf[header_begin + 3] == 0x42);
 }
 
+bool ClothesFS::formatBlock(uint32_t num, uint32_t next)
+{
+    uint8_t buf[m_phys->sectorSize()];
+    for (uint32_t i = 0; i < m_phys->sectorSize(); ++i) {
+        buf[i] = 0;
+    }
+
+    uint32_t blocks = m_block_in_sectors;
+    numToData(next, buf, m_phys->sectorSize() - 5, 4);
+
+    while (blocks > 0) {
+        if (blocks == 1) {
+            numToData(0x00000042, buf, 0, 4);
+        }
+        m_phys->write(buf, 1, (num + blocks - 1) * m_blocksize, 0);
+        numToData(0, buf, m_phys->sectorSize() - 5, 4);
+        --blocks;
+    }
+
+    return true;
+}
+
+bool ClothesFS::formatBlocks()
+{
+    uint32_t next = 0;
+    for (uint32_t i = m_blocks - 1; i > 2; --i) {
+        printf("blk: %d\n", i - 1);
+        formatBlock(i - 1, next);
+        next = i;
+    }
+    return true;
+}
+
 bool ClothesFS::format()
 {
     uint8_t buf[m_phys->sectorSize()];
@@ -71,15 +104,59 @@ bool ClothesFS::format()
     buf[header_begin + 2] = 0x00;
     buf[header_begin + 3] = 0x42;
 
-    numToData(m_blocksize, buf, header_begin + 4, 2);
+    uint32_t pos = header_begin + 4;
+    numToData(m_blocksize, buf, pos, 2);
+
+    pos += 2;
 
     //flags
-    buf[header_begin + 6] = 0x0;
-    buf[header_begin + 7] = 0x0;
+    buf[pos] = 0x0;
+    //grpindex
+    buf[pos + 1] = 0x0;
 
-    for (int i = 8; i < 8 + 8; ++i) {
-        buf[header_begin + i] = rand() % 0xFF;
+    pos += 2;
+
+    // vol id
+    for (int i = 0; i < 8; ++i) {
+        buf[pos + i] = rand() % 0xFF;
     }
+    pos += 8;
+
+    // size
+    numToData(m_phys->size(), buf, pos, 4);
+    pos += 8;
+    m_blocks = m_phys->size() / m_blocksize;
+    m_block_in_sectors = m_blocksize / m_phys->sectorSize();
+
+    // vol name
+    buf[pos + 0] = 'V';
+    buf[pos + 1] = 'O';
+    buf[pos + 2] = 'L';
+    buf[pos + 3] = '4';
+    buf[pos + 4] = '2';
+    pos += 32;
+
+    // Block 1 is root dir
+    numToData(1, buf, pos, 4);
+    pos += 4;
+
+    formatBlocks();
+
+    // Used
+    numToData(2, buf, pos, 4);
+    pos += 4;
+
+    // Journal1
+    numToData(0, buf, pos, 4);
+    pos += 4;
+
+    // Journal2
+    numToData(0, buf, pos, 4);
+    pos += 4;
+
+    // Freechain
+    numToData(0x0, buf, pos, 4);
+    pos += 4;
 
     return m_phys->write(buf, 1, 0, 0);
 }
