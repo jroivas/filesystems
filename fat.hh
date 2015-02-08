@@ -153,6 +153,7 @@ public:
     FATInfo *getItem(const char *name);
     bool readFile(FATInfo *info);
     void print();
+    void listDir(FATInfo *info);
 
 protected:
     std::string getPartialName(std::string name, int part);

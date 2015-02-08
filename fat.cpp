@@ -253,6 +253,7 @@ FATInfo *FAT::getItem(const char *name)
     std::string partname = getPartialName(name, curindex);
 
     FATInfo *main = readRootDir();
+    if (partname == ".") return main;
     FATInfo *item = main;
     while (item != NULL) {
         if (item->m_name == partname) {
@@ -274,4 +275,17 @@ FATInfo *FAT::getItem(const char *name)
     }
 
     return NULL;
+}
+
+void FAT::listDir(FATInfo *info)
+{
+    if (info == NULL) return;
+
+    FATInfo *item = readDir(info->m_pos);
+    while (item != NULL) {
+        char t = 'F';
+        if (item->m_attr & FATInfo::T_DIR) t = 'D';
+        printf("%c %10d %s\n", t, item->m_size, item->m_name.c_str());
+        item = item->m_next;
+    }
 }

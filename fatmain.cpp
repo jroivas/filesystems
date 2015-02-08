@@ -15,7 +15,6 @@ int main(int argc, char **argv)
     bool res = fat.readBootRecord();
     if (!res) return 1;
 
-    //FATInfo *item = fat.getItem("hakem/daa.txt");
     FATInfo *item = fat.getItem(argv[2]);
     if (item != NULL) {
         if (item ->m_data != NULL) {
@@ -29,7 +28,7 @@ int main(int argc, char **argv)
             }
             printf("GOT DATA: %s\n", res.c_str());
         } else {
-            printf("NULL DATA\n");
+            fat.listDir(item);
         }
     } else {
         printf("NULL ITEM\n");
