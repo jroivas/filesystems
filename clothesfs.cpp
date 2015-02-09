@@ -198,15 +198,25 @@ bool ClothesFS::format()
         // TODO
     }
 
-    uint8_t root[m_blocksize];
-    clearBuffer(root, m_blocksize);
-
-    numToData(0x42, root, 0, 2);
-    numToData(0x04, root, 2, 1);
-    numToData(0x00, root, 3, 1);
-    putBlock(1, root);
+    if (!initDirectory(1, 0x04)) {
+        return false;
+    }
 
     return res;
+}
+
+bool ClothesFS::initDirectory(
+    uint32_t index,
+    uint8_t type)
+{
+    uint8_t data[m_blocksize];
+    clearBuffer(data, m_blocksize);
+
+    numToData(0x42, data, 0, 2);
+    numToData(type, data, 2, 1);
+    numToData(0x00, data, 3, 1);
+
+    return putBlock(1, data);
 }
 
 uint32_t ClothesFS::takeFreeBlock()
@@ -232,10 +242,22 @@ uint32_t ClothesFS::takeFreeBlock()
     return freechain;
 }
 
+bool ClothesFS::dirContinues(
+    uint32_t index,
+    uint32_t next)
+{
+    uint8_t data[m_blocksize];
+    if (!getBlock(index, data)) {
+        return false;
+    }
+
+    numToData(next, data, m_blocksize - 4, 4);
+    return putBlock(index, data);
+}
+
 bool ClothesFS::addToDirectory(
     uint32_t index,
-    uint32_t meta
-    )
+    uint32_t meta)
 {
     uint8_t data[m_blocksize];
     if (!getBlock(index, data)) {
@@ -248,9 +270,9 @@ bool ClothesFS::addToDirectory(
     }
 
     uint32_t type = dataToNum(data, 2, 1);
-    //FIXME
+    //FIXME hardcode
     if (type != 0x04
-        || type != 0x10) {
+        && type != 0x10) {
         return false;
     }
 
@@ -259,18 +281,21 @@ bool ClothesFS::addToDirectory(
         uint32_t val = dataToNum(data, ptr, 4);
         if (val == 0) {
             numToData(meta, data, ptr, 4);
-            return true;
+            return putBlock(index, data);
         }
+        ++ptr;
     }
     uint32_t next = dataToNum(data, m_blocksize - 4, 4);
     if (next != 0) {
-        return addToDiretory(next, meta);
+        return addToDirectory(next, meta);
     }
 
     next = takeFreeBlock();
     if (next != 0) {
-        dirContinue(index, next);
-        return addToDiretory(next, meta);
+        if (dirContinues(index, next)
+            && initDirectory(next, 0x10)) {
+            return addToDirectory(next, meta);
+        }
     }
 
     return false;
@@ -282,11 +307,20 @@ bool ClothesFS::addFile(
     const char *contents,
     uint32_t size)
 {
+    if (parent == 0) {
+        return false;
+    }
     uint32_t block = takeFreeBlock();
     if (block == 0) {
         return false;
     }
     printf("Blockken: %u\n", block);
+    bool res = addToDirectory(parent, block);
+    if (res) {
+        printf("ok\n");
+    } else {
+        printf("FF\n");
+    }
 
     return false;
 }

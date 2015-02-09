@@ -111,6 +111,10 @@ protected:
     bool putBlock(uint32_t index, uint8_t *buffer);
     void clearBuffer(uint8_t *buf, uint32_t size);
 
+    bool initDirectory(uint32_t index,uint8_t type);
+    bool addToDirectory(uint32_t index, uint32_t meta);
+    bool dirContinues(uint32_t index, uint32_t next);
+
     ClothesPhys *m_phys;
     uint32_t m_blocksize;
     uint32_t m_blocks;
