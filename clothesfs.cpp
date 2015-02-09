@@ -327,7 +327,7 @@ bool ClothesFS::addToMeta(
             numToData(meta, data, ptr, 4);
             return putBlock(index, data);
         }
-        ++ptr;
+        ptr += 4;
     }
     uint32_t next = dataToNum(data, m_blocksize - 4, 4);
     if (next != 0) {
@@ -396,7 +396,6 @@ bool ClothesFS::updateMeta(
     uint32_t type = dataToNum(data, 2, 1);
     if (type != 0x02
         && type != 0x04) {
-        printf("tyyp: %x\n", type);
         returnError(false);
     }
 
