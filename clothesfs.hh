@@ -97,7 +97,11 @@ public:
     void numToData(uint64_t num, uint8_t *buf, int start, int cnt);
     bool detect();
     bool format();
-    bool addFile(const char *name, const char *contents, uint32_t size);
+    bool addFile(
+        uint32_t parent,
+        const char *name,
+        const char *contents,
+        uint32_t size);
 
 protected:
     uint32_t takeFreeBlock();
@@ -105,6 +109,7 @@ protected:
     uint32_t formatBlocks();
     bool getBlock(uint32_t index, uint8_t *buffer);
     bool putBlock(uint32_t index, uint8_t *buffer);
+    void clearBuffer(uint8_t *buf, uint32_t size);
 
     ClothesPhys *m_phys;
     uint32_t m_blocksize;

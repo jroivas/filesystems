@@ -99,42 +99,12 @@ bool ClothesFS::putBlock(uint32_t index, uint8_t *data)
 bool ClothesFS::formatBlock(uint32_t num, uint32_t next)
 {
     uint8_t buf[m_blocksize];
-    for (uint32_t i = 0; i < m_blocksize; ++i) {
-        buf[i] = 0;
-    }
+    clearBuffer(buf, m_blocksize);
 
     numToData(0x42, buf, 0, 4);
     numToData(next, buf, m_blocksize - 4, 4);
 
     return putBlock(num, buf);
-#if 0
-    uint8_t buf[m_phys->sectorSize()];
-    for (uint32_t i = 0; i < m_phys->sectorSize(); ++i) {
-        buf[i] = 0;
-    }
-
-    uint32_t blocks = m_block_in_sectors;
-    numToData(next, buf, m_phys->sectorSize() - 5, 4);
-
-    while (blocks > 0) {
-        if (blocks == 1) {
-            numToData(0x00000042, buf, 0, 4);
-        }
-        uint64_t index = num * m_blocksize;
-        index += (blocks - 1) * m_phys->sectorSize();
-
-        if (!m_phys->write(
-                buf, 1,
-                index & 0xFFFFFFFF,
-                (index >> 32) & 0xFFFFFFFF)) {
-            return false;
-        }
-        numToData(0, buf, m_phys->sectorSize() - 5, 4);
-        --blocks;
-    }
-
-    return true;
-#endif
 }
 
 uint32_t ClothesFS::formatBlocks()
@@ -150,12 +120,17 @@ uint32_t ClothesFS::formatBlocks()
     return start;
 }
 
+void ClothesFS::clearBuffer(uint8_t *buf, uint32_t size)
+{
+    for (uint32_t i = 0; i < size; ++i) {
+        buf[i] = 0;
+    }
+}
+
 bool ClothesFS::format()
 {
     uint8_t buf[m_phys->sectorSize()];
-    for (uint32_t i = 0; i < m_phys->sectorSize(); ++i) {
-        buf[i] = 0;
-    }
+    clearBuffer(buf, m_phys->sectorSize());
 
     buf[header_begin + 0] = 0x00;
     buf[header_begin + 1] = 0x42;
@@ -223,6 +198,14 @@ bool ClothesFS::format()
         // TODO
     }
 
+    uint8_t root[m_blocksize];
+    clearBuffer(root, m_blocksize);
+
+    numToData(0x42, root, 0, 2);
+    numToData(0x04, root, 2, 1);
+    numToData(0x00, root, 3, 1);
+    putBlock(1, root);
+
     return res;
 }
 
@@ -235,16 +218,11 @@ uint32_t ClothesFS::takeFreeBlock()
     }
 
     uint32_t freechain = dataToNum(data, 104, 4);
-    printf("Freechain: %u\n", freechain);
 
     if (!getBlock(freechain, block)) {
         return 0;
     }
-    uint32_t index = dataToNum(block, 0, 4);
     uint32_t next_freechain = dataToNum(block, m_blocksize - 4, 4);
-
-    printf("index: %x\n", index);
-    printf("Next freechain: %u\n", next_freechain);
 
     numToData(next_freechain, data, 104, 4);
     if (!putBlock(0, data)) {
@@ -254,10 +232,62 @@ uint32_t ClothesFS::takeFreeBlock()
     return freechain;
 }
 
-bool ClothesFS::addFile(const char *name, const char *contents, uint32_t size)
+bool ClothesFS::addToDirectory(
+    uint32_t index,
+    uint32_t meta
+    )
+{
+    uint8_t data[m_blocksize];
+    if (!getBlock(index, data)) {
+        return false;
+    }
+
+    uint32_t id = dataToNum(data, 0, 2);
+    if (id != 0x0042) {
+        return false;
+    }
+
+    uint32_t type = dataToNum(data, 2, 1);
+    //FIXME
+    if (type != 0x04
+        || type != 0x10) {
+        return false;
+    }
+
+    uint32_t ptr = 4;
+    while (ptr < m_blocksize - 4) {
+        uint32_t val = dataToNum(data, ptr, 4);
+        if (val == 0) {
+            numToData(meta, data, ptr, 4);
+            return true;
+        }
+    }
+    uint32_t next = dataToNum(data, m_blocksize - 4, 4);
+    if (next != 0) {
+        return addToDiretory(next, meta);
+    }
+
+    next = takeFreeBlock();
+    if (next != 0) {
+        dirContinue(index, next);
+        return addToDiretory(next, meta);
+    }
+
+    return false;
+}
+
+bool ClothesFS::addFile(
+    uint32_t parent,
+    const char *name,
+    const char *contents,
+    uint32_t size)
 {
     uint32_t block = takeFreeBlock();
+    if (block == 0) {
+        return false;
+    }
     printf("Blockken: %u\n", block);
+
     return false;
 }
 
