@@ -78,7 +78,7 @@ int main(int argc, char **argv)
     cloth.setPhysical(&phys);
     cloth.format();
     const char *data = "This is\ntest file\n with contents...\n";
-    cloth.addFile(1, "test", data, strlen(data));
+    bool res = cloth.addFile(1, "test", data, strlen(data));
 
-    printf("ok: %d\n", cloth.detect());
+    printf("ok: %d %d\n", cloth.detect(), res);
 }

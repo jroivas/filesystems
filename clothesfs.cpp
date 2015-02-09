@@ -198,14 +198,14 @@ bool ClothesFS::format()
         // TODO
     }
 
-    if (!initDirectory(1, 0x04)) {
+    if (!initMeta(1, 0x04)) {
         return false;
     }
 
     return res;
 }
 
-bool ClothesFS::initDirectory(
+bool ClothesFS::initMeta(
     uint32_t index,
     uint8_t type)
 {
@@ -216,7 +216,26 @@ bool ClothesFS::initDirectory(
     numToData(type, data, 2, 1);
     numToData(0x00, data, 3, 1);
 
-    return putBlock(1, data);
+    return putBlock(index, data);
+}
+
+uint32_t ClothesFS::initData(
+    uint32_t index,
+    uint8_t type,
+    uint8_t algo)
+{
+    uint8_t data[m_blocksize];
+    clearBuffer(data, m_blocksize);
+
+    numToData(0x4242, data, 0, 2);
+    numToData(type, data, 2, 1);
+    numToData(algo, data, 3, 1);
+
+    if (!putBlock(index, data)) {
+        return 0;
+    }
+
+    return 4;
 }
 
 uint32_t ClothesFS::takeFreeBlock()
@@ -255,9 +274,25 @@ bool ClothesFS::dirContinues(
     return putBlock(index, data);
 }
 
-bool ClothesFS::addToDirectory(
+uint8_t ClothesFS::baseType(uint8_t type) const
+{
+    if (type == 0x08) type = 0x02;
+    else if (type == 0x10) type = 0x04;
+    return type;
+}
+
+bool ClothesFS::validType(uint8_t type, uint8_t valid) const
+{
+    type = baseType(type);
+    valid = baseType(valid);
+
+    return type == valid;
+}
+
+bool ClothesFS::addToMeta(
     uint32_t index,
-    uint32_t meta)
+    uint32_t meta,
+    uint8_t type)
 {
     uint8_t data[m_blocksize];
     if (!getBlock(index, data)) {
@@ -269,10 +304,9 @@ bool ClothesFS::addToDirectory(
         return false;
     }
 
-    uint32_t type = dataToNum(data, 2, 1);
+    uint32_t data_type = dataToNum(data, 2, 1);
     //FIXME hardcode
-    if (type != 0x04
-        && type != 0x10) {
+    if (!validType(data_type, type)) {
         return false;
     }
 
@@ -287,18 +321,61 @@ bool ClothesFS::addToDirectory(
     }
     uint32_t next = dataToNum(data, m_blocksize - 4, 4);
     if (next != 0) {
-        return addToDirectory(next, meta);
+        return addToMeta(next, meta, type);
     }
 
     next = takeFreeBlock();
     if (next != 0) {
         if (dirContinues(index, next)
-            && initDirectory(next, 0x10)) {
-            return addToDirectory(next, meta);
+            && initMeta(next, 0x10)) {
+            return addToMeta(next, meta, type);
         }
     }
 
     return false;
+}
+
+bool ClothesFS::addData(
+    uint32_t meta,
+    const char *contents,
+    uint32_t size)
+{
+    uint32_t data_block = takeFreeBlock();
+    if (data_block == 0) {
+        printf("a\n");
+        return false;
+    }
+    if (!addToMeta(meta, data_block, 0x02)) {
+        printf("b\n");
+        return false;
+    }
+
+    uint32_t pos = initData(data_block, 0x01, 0);
+    uint8_t data[m_blocksize];
+    if (!getBlock(data_block, data)) {
+        printf("c\n");
+        return false;
+    }
+
+    const char *input = contents;
+    uint32_t data_size = size;
+    while (data_size > 0 && pos < m_blocksize) {
+        data[pos] = *input;
+        ++pos;
+        ++input;
+        --data_size;
+    }
+
+    if (!putBlock(data_block, data)) {
+        printf("e\n");
+        return false;
+    }
+    if (data_size > 0) {
+        printf("f\n");
+        return addData(meta, input, data_size);
+    }
+
+    return true;
 }
 
 bool ClothesFS::addFile(
@@ -314,15 +391,14 @@ bool ClothesFS::addFile(
     if (block == 0) {
         return false;
     }
-    printf("Blockken: %u\n", block);
-    bool res = addToDirectory(parent, block);
-    if (res) {
-        printf("ok\n");
-    } else {
-        printf("FF\n");
+    if (!addToMeta(parent, block, 0x04)) {
+        return false;
+    }
+    if (!initMeta(block, 0x02)) {
+        return false;
     }
 
-    return false;
+    return addData(block, contents, size);
 }
 
 #if 0

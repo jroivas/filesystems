@@ -111,9 +111,14 @@ protected:
     bool putBlock(uint32_t index, uint8_t *buffer);
     void clearBuffer(uint8_t *buf, uint32_t size);
 
-    bool initDirectory(uint32_t index,uint8_t type);
-    bool addToDirectory(uint32_t index, uint32_t meta);
+    bool initMeta(uint32_t index,uint8_t type);
+    uint32_t initData(uint32_t index, uint8_t type, uint8_t algo);
+    bool addToMeta(uint32_t index, uint32_t meta, uint8_t type);
     bool dirContinues(uint32_t index, uint32_t next);
+    bool addData(uint32_t meta, const char *contents, uint32_t size);
+
+    uint8_t baseType(uint8_t type) const;
+    bool validType(uint8_t type, uint8_t valid) const;
 
     ClothesPhys *m_phys;
     uint32_t m_blocksize;
