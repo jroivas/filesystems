@@ -140,9 +140,9 @@ bool ClothesFS::formatBlock(uint32_t num, uint32_t next)
 uint32_t ClothesFS::formatBlocks()
 {
     uint32_t next = 0;
-    uint32_t start = 3;
+    uint32_t start = 2;
     for (uint32_t i = m_blocks - 1; i >= start; --i) {
-        if (!formatBlock(i - 1, next)) {
+        if (!formatBlock(i, next)) {
             return 0;
         }
         next = i;
