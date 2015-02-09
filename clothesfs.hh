@@ -22,6 +22,7 @@ public:
     virtual uint32_t sectorSize() const = 0;
 };
 
+#if 0
 class ClothesListing
 {
 public:
@@ -35,7 +36,7 @@ public:
     }
     ~ClothesListing();
 
-    uint32_t entires() const;
+    uint32_t entries() const;
 
     uint8_t type(uint32_t index) const;
     const char *filename(uint32_t index) const;
@@ -79,6 +80,7 @@ protected:
 
     void append(Item *item);
 };
+#endif
 
 class ClothesFS
 {
@@ -98,8 +100,11 @@ public:
     bool addFile(const char *name, const char *contents, uint32_t size);
 
 protected:
+    uint32_t takeFreeBlock();
     bool formatBlock(uint32_t num, uint32_t next);
-    bool formatBlocks();
+    uint32_t formatBlocks();
+    bool getBlock(uint32_t index, uint8_t *buffer);
+    bool putBlock(uint32_t index, uint8_t *buffer);
 
     ClothesPhys *m_phys;
     uint32_t m_blocksize;

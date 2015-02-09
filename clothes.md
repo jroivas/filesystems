@@ -150,18 +150,20 @@ Last 4 bytes can be zero, or number of another block where journal continues.
 Payload is almost pure data. Total length of data is defined in metadata entry.
 After that data is read from defined payload blocks until everything is read.
 
-Payload block has following header.
+Payload block has following header:
 
     ID       2 bytes  0x4242
     type     1 byte   0x00 = Free/Invalid
                       0x01 = Used
                       0x02 = Freed
-    algo     1 byte   0x01 = XOR
+    algo     1 byte   0x00 = Disabled
+                      0x01 = XOR
                       0x02 = CRC32
                       0x04 = sum_of_bytes mod 2^32
                       0x08 = ??
     check    4 byte   Checksum of whole block (without header)
-    data     block_size - 8 bytes
+                      Does not exists if algo is disabled
+    data     block_size - 4/8 bytes
 
 
 Checksum is calculated with defined algorithms.

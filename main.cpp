@@ -44,13 +44,10 @@ public:
         uint32_t pos,
         uint32_t pos_hi)
     {
-        printf("Write to %d\n", pos);
         if (pos >= m_size) {
             return false;
         }
-        printf("seek %d\n", pos);
         int res = fseek(m_fp, pos, SEEK_SET);
-        printf("res %d\n", res);
 
         if (res == 0) {
             res = fwrite(buffer, 1, sectorSize(), m_fp);

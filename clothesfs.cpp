@@ -59,8 +59,55 @@ bool ClothesFS::detect()
         && buf[header_begin + 3] == 0x42);
 }
 
+bool ClothesFS::getBlock(uint32_t index, uint8_t *data)
+{
+    for (uint32_t block = 0; block < m_block_in_sectors; --block) {
+        uint64_t pos = index * m_blocksize;
+        pos += block * m_phys->sectorSize();
+
+        if (!m_phys->read(
+                data + m_phys->sectorSize() * block,
+                1,
+                pos & 0xFFFFFFFF,
+                (pos >> 32) & 0xFFFFFFFF)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool ClothesFS::putBlock(uint32_t index, uint8_t *data)
+{
+    for (uint32_t block = 0; block < m_block_in_sectors; --block) {
+        uint64_t pos = index * m_blocksize;
+        pos += block * m_phys->sectorSize();
+
+        if (!m_phys->write(
+                data + m_phys->sectorSize() * block,
+                1,
+                pos & 0xFFFFFFFF,
+                (pos >> 32) & 0xFFFFFFFF)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
 bool ClothesFS::formatBlock(uint32_t num, uint32_t next)
 {
+    uint8_t buf[m_blocksize];
+    for (uint32_t i = 0; i < m_blocksize; ++i) {
+        buf[i] = 0;
+    }
+
+    numToData(0x42, buf, 0, 4);
+    numToData(next, buf, m_blocksize - 4, 4);
+
+    return putBlock(num, buf);
+#if 0
     uint8_t buf[m_phys->sectorSize()];
     for (uint32_t i = 0; i < m_phys->sectorSize(); ++i) {
         buf[i] = 0;
@@ -73,23 +120,34 @@ bool ClothesFS::formatBlock(uint32_t num, uint32_t next)
         if (blocks == 1) {
             numToData(0x00000042, buf, 0, 4);
         }
-        m_phys->write(buf, 1, (num + blocks - 1) * m_blocksize, 0);
+        uint64_t index = num * m_blocksize;
+        index += (blocks - 1) * m_phys->sectorSize();
+
+        if (!m_phys->write(
+                buf, 1,
+                index & 0xFFFFFFFF,
+                (index >> 32) & 0xFFFFFFFF)) {
+            return false;
+        }
         numToData(0, buf, m_phys->sectorSize() - 5, 4);
         --blocks;
     }
 
     return true;
+#endif
 }
 
-bool ClothesFS::formatBlocks()
+uint32_t ClothesFS::formatBlocks()
 {
     uint32_t next = 0;
-    for (uint32_t i = m_blocks - 1; i > 2; --i) {
-        printf("blk: %d\n", i - 1);
-        formatBlock(i - 1, next);
+    uint32_t start = 3;
+    for (uint32_t i = m_blocks - 1; i >= start; --i) {
+        if (!formatBlock(i - 1, next)) {
+            return 0;
+        }
         next = i;
     }
-    return true;
+    return start;
 }
 
 bool ClothesFS::format()
@@ -140,7 +198,7 @@ bool ClothesFS::format()
     numToData(1, buf, pos, 4);
     pos += 4;
 
-    formatBlocks();
+    uint32_t freechain = formatBlocks();
 
     // Used
     numToData(2, buf, pos, 4);
@@ -155,18 +213,57 @@ bool ClothesFS::format()
     pos += 4;
 
     // Freechain
-    numToData(0x0, buf, pos, 4);
+    printf("freepos: %d\n", pos);
+    numToData(freechain, buf, pos, 4);
     pos += 4;
 
-    return m_phys->write(buf, 1, 0, 0);
+    bool res = m_phys->write(buf, 1, 0, 0);
+
+    if (res and m_blocksize > 512) {
+        // TODO
+    }
+
+    return res;
+}
+
+uint32_t ClothesFS::takeFreeBlock()
+{
+    uint8_t data[m_blocksize];
+    uint8_t block[m_blocksize];
+    if (!getBlock(0, data)) {
+        return 0;
+    }
+
+    uint32_t freechain = dataToNum(data, 104, 4);
+    printf("Freechain: %u\n", freechain);
+
+    if (!getBlock(freechain, block)) {
+        return 0;
+    }
+    uint32_t index = dataToNum(block, 0, 4);
+    uint32_t next_freechain = dataToNum(block, m_blocksize - 4, 4);
+
+    printf("index: %x\n", index);
+    printf("Next freechain: %u\n", next_freechain);
+
+    numToData(next_freechain, data, 104, 4);
+    if (!putBlock(0, data)) {
+        return 0;
+    }
+
+    return freechain;
 }
 
 bool ClothesFS::addFile(const char *name, const char *contents, uint32_t size)
 {
+    uint32_t block = takeFreeBlock();
+    printf("Blockken: %u\n", block);
     return false;
 }
 
-uint32_t ClothesListing::entires() const
+#if 0
+
+uint32_t ClothesListing::entries() const
 {
 }
 
@@ -319,3 +416,4 @@ bool ClothesListing::write(uint8_t *data, uint32_t size)
 
     return true;
 }
+#endif
