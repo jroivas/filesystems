@@ -101,7 +101,7 @@ public:
         uint32_t parent,
         const char *name,
         const char *contents,
-        uint32_t size);
+        uint64_t size);
 
 protected:
     uint32_t takeFreeBlock();
@@ -115,7 +115,8 @@ protected:
     uint32_t initData(uint32_t index, uint8_t type, uint8_t algo);
     bool addToMeta(uint32_t index, uint32_t meta, uint8_t type);
     bool dirContinues(uint32_t index, uint32_t next);
-    bool addData(uint32_t meta, const char *contents, uint32_t size);
+    bool addData(uint32_t meta, const char *contents, uint64_t size);
+    bool updateMeta(uint32_t index, uint8_t *name, uint64_t size);
 
     uint8_t baseType(uint8_t type) const;
     bool validType(uint8_t type, uint8_t valid) const;
