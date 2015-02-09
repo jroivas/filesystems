@@ -12,7 +12,7 @@ Contains magic and other info.
     JUMP2       8 bytes   Jump instruction 2
     JUMP3       8 bytes   Jump instruction 3
     JUMP4       8 bytes   Jump instruction 4
-    ID          4 bytes   0x00420042
+    ID          4 bytes   0x00420041
     blocksize   2 bytes   Default 512 (match sector size)
     flags       1 byte    0x00 == No flags
                           0x01 == Support mirror
@@ -52,8 +52,8 @@ First one is logical volume group, where disk space can be extended
 by appending new disk to array.
 Order of volumes is defined by grpindex, so that smaller comes earlier.
 Maximum number of volumes is 256.
-Whole volume is handles as one big volume, so block size needs to be
-big enough to fit WHOLE array in index.
+Whole volume group is handled as one big volume, so block size needs to be
+big enough to fit WHOLE volume array in index.
 It's recommended that logical groups choose at least 1k or 2k block size.
 For future proof installations, 4k block size is recommended.
 In logical view block numbers continue from where previous volume left.

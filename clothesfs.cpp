@@ -58,7 +58,7 @@ bool ClothesFS::detect()
            buf[header_begin + 0] == 0x00
         && buf[header_begin + 1] == 0x42
         && buf[header_begin + 2] == 0x00
-        && buf[header_begin + 3] == 0x42);
+        && buf[header_begin + 3] == 0x41);
 }
 
 bool ClothesFS::getBlock(uint32_t index, uint8_t *data)
@@ -137,7 +137,7 @@ bool ClothesFS::format()
     buf[header_begin + 0] = 0x00;
     buf[header_begin + 1] = 0x42;
     buf[header_begin + 2] = 0x00;
-    buf[header_begin + 3] = 0x42;
+    buf[header_begin + 3] = 0x41;
 
     uint32_t pos = header_begin + 4;
     numToData(m_blocksize, buf, pos, 2);
@@ -171,7 +171,7 @@ bool ClothesFS::format()
     buf[pos + 4] = '2';
     pos += 32;
 
-    // Block 1 is root dir
+    // Block 1 is root dir (FIXME)
     numToData(1, buf, pos, 4);
     pos += 4;
 
