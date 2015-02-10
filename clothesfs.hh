@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <string>
 
 class ClothesPhys
 {
@@ -91,6 +92,13 @@ public:
         {
             return m_ok;
         }
+        inline uint8_t *data()
+        {
+            return m_data;
+        }
+        std::string name();
+        uint32_t nameLen();
+        uint64_t size();
 
     protected:
         bool getCurrent();
@@ -141,7 +149,7 @@ protected:
     bool addToMeta(uint32_t index, uint32_t meta, uint8_t type);
     bool dirContinues(uint32_t index, uint32_t next);
     bool addData(uint32_t meta, const char *contents, uint64_t size);
-    bool updateMeta(uint32_t index, uint8_t *name, uint64_t size);
+    bool updateMeta(uint32_t index, const uint8_t *name, uint64_t size);
 
     uint8_t baseType(uint8_t type) const;
     bool validType(uint8_t type, uint8_t valid) const;

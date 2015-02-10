@@ -10,6 +10,9 @@ public:
     FilePhys(std::string fname, uint32_t maxsize)
     {
         m_fp = fopen(fname.c_str(), "r+");
+        if (m_fp == NULL) {
+            m_fp = fopen(fname.c_str(), "w+");
+        }
         m_size = maxsize;
     }
     ~FilePhys()
@@ -79,6 +82,13 @@ int main(int argc, char **argv)
     cloth.format("My impressive volume");
     const char *data = "This is\ntest file\n with contents...\n";
     bool res = cloth.addFile(1, "test", data, strlen(data));
+    res = cloth.addFile(1, "dummy", "dummy", 5);
 
     printf("ok: %d %d\n", cloth.detect(), res);
+
+    ClothesFS::Iterator iter = cloth.list(1);
+    while (iter.ok()) {
+        printf("%5lu   %s\n", iter.size(), iter.name().c_str());
+        if (!iter.next()) break;
+    }
 }

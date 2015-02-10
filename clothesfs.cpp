@@ -7,7 +7,11 @@ static uint32_t header_begin = 8 * 4;
 static uint32_t metadata_id = 0x42;
 static uint32_t payload_id = 0x4242;
 
-#define returnError(X) do { printf("ERROR @%d\n", __LINE__); return (X); } while(0);
+#define returnError(X)\
+do {\
+    printf("ERROR @%d  %s\n", __LINE__, __PRETTY_FUNCTION__);\
+    return (X);\
+} while(0);
 
 ClothesFS::ClothesFS()
     : m_phys(NULL),
@@ -204,7 +208,10 @@ bool ClothesFS::format(
         // TODO
     }
 
-    if (!initMeta(1, 0x04)) {
+    if (!initMeta(1, META_DIR)) {
+        returnError(false);
+    }
+    if (!updateMeta(1, (const uint8_t*)"/", 0x0)) {
         returnError(false);
     }
 
@@ -395,7 +402,7 @@ bool ClothesFS::addData(
 
 bool ClothesFS::updateMeta(
     uint32_t index,
-    uint8_t *name,
+    const uint8_t *name,
     uint64_t size)
 {
     uint8_t data[m_blocksize];
@@ -447,7 +454,7 @@ bool ClothesFS::addFile(
     if (!initMeta(block, META_FILE)) {
         returnError(false);
     }
-    if (!updateMeta(block, (uint8_t*)name, size)) {
+    if (!updateMeta(block, (const uint8_t*)name, size)) {
         returnError(false);
     }
 
@@ -458,15 +465,17 @@ ClothesFS::Iterator ClothesFS::list(
     uint32_t parent)
 {
     Iterator iter(parent, 0);
+    if (parent == 0) return iter;
+
     iter.m_parent = new uint8_t[m_blocksize];
     iter.m_data = new uint8_t[m_blocksize];
     iter.m_fs = this;
 
     if (!getBlock(parent, iter.m_parent)) {
-        return iter;
+        returnError(iter);
     }
     if (!iter.getCurrent()) {
-        return iter;
+        returnError(iter);
     }
 
     iter.m_ok = true;
@@ -475,12 +484,17 @@ ClothesFS::Iterator ClothesFS::list(
 
 bool ClothesFS::Iterator::getCurrent()
 {
+    uint32_t type = dataToNum(m_parent, 2, 1);
+    if (type == 0) {
+        returnError(false);
+    }
+
     uint32_t start = 4;
-    uint32_t type = dataToNum(m_data, 2, 1);
     if (type == META_FILE
         || type == META_DIR) {
         start += 8;
-        uint32_t namelen = m_fs->dataToNum(m_data, start, 4);
+        uint32_t namelen = m_fs->dataToNum(m_parent, start, 4);
+        start += 4;
         start += namelen;
         while (start % 4 != 0) {
             ++start;
@@ -512,5 +526,32 @@ bool ClothesFS::Iterator::getCurrent()
 bool ClothesFS::Iterator::next()
 {
     ++m_index;
-    return getCurrent();
+    m_ok = getCurrent();
+    return m_ok;
+}
+
+uint32_t ClothesFS::Iterator::nameLen()
+{
+    if (m_data == NULL) return 0;
+
+    return dataToNum(m_data, 12, 4);
+}
+
+std::string ClothesFS::Iterator::name()
+{
+    if (m_data == NULL) return NULL;
+
+    std::string res;
+    uint32_t namelen = nameLen();
+    for (uint32_t i = 0; i < namelen; ++i) {
+        res += (char)m_data[16 + i];
+    }
+    return res;
+}
+
+uint64_t ClothesFS::Iterator::size()
+{
+    if (m_data == NULL) return 0;
+
+    return dataToNum(m_data, 4, 8);
 }
