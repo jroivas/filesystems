@@ -55,6 +55,55 @@ public:
         ALGO_CRC = 0x02,
         ALGO_SUMMOD = 0x04
     };
+
+    class Iterator {
+        friend class ClothesFS;
+    public:
+        Iterator()
+            : m_ok(false),
+            m_block(0),
+            m_index(0),
+            m_fs(NULL),
+            m_parent(NULL),
+            m_data(NULL)
+        {
+        }
+        Iterator(uint32_t blk, uint32_t index)
+            : m_ok(false),
+            m_block(blk),
+            m_index(index),
+            m_fs(NULL),
+            m_parent(NULL),
+            m_data(NULL)
+        {
+        }
+        ~Iterator() {
+            m_ok = false;
+            if (m_parent != NULL) {
+                delete[] m_parent;
+            }
+            if (m_data != NULL) {
+                delete[] m_data;
+            }
+        }
+        bool next();
+        inline bool ok() const
+        {
+            return m_ok;
+        }
+
+    protected:
+        bool getCurrent();
+
+        bool m_ok;
+        uint32_t m_block;
+        uint32_t m_index;
+
+        ClothesFS *m_fs;
+        uint8_t *m_parent;
+        uint8_t *m_data;
+    };
+
     ClothesFS();
     ~ClothesFS();
 
@@ -62,9 +111,13 @@ public:
     {
         m_phys = phys;
     }
+    inline uint32_t blockSize() const
+    {
+        return m_blocksize;
+    }
 
-    uint32_t dataToNum(uint8_t *buf, int start, int cnt);
-    void numToData(uint64_t num, uint8_t *buf, int start, int cnt);
+    static uint32_t dataToNum(uint8_t *buf, int start, int cnt);
+    static void numToData(uint64_t num, uint8_t *buf, int start, int cnt);
     bool detect();
     bool format(const char *volid);
     bool addFile(
@@ -72,6 +125,8 @@ public:
         const char *name,
         const char *contents,
         uint64_t size);
+    ClothesFS::Iterator list(
+        uint32_t parent);
 
 protected:
     uint32_t takeFreeBlock();

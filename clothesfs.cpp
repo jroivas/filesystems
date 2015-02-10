@@ -403,9 +403,9 @@ bool ClothesFS::updateMeta(
         returnError(false);
     }
 
-    uint32_t type = dataToNum(data, 2, 1);
-    if (type != 0x02
-        && type != 0x04) {
+    uint32_t type = baseType(dataToNum(data, 2, 1));
+    if (type != META_FILE
+        && type != META_DIR) {
         returnError(false);
     }
 
@@ -452,4 +452,65 @@ bool ClothesFS::addFile(
     }
 
     return addData(block, contents, size);
+}
+
+ClothesFS::Iterator ClothesFS::list(
+    uint32_t parent)
+{
+    Iterator iter(parent, 0);
+    iter.m_parent = new uint8_t[m_blocksize];
+    iter.m_data = new uint8_t[m_blocksize];
+    iter.m_fs = this;
+
+    if (!getBlock(parent, iter.m_parent)) {
+        return iter;
+    }
+    if (!iter.getCurrent()) {
+        return iter;
+    }
+
+    iter.m_ok = true;
+    return iter;
+}
+
+bool ClothesFS::Iterator::getCurrent()
+{
+    uint32_t start = 4;
+    uint32_t type = dataToNum(m_data, 2, 1);
+    if (type == META_FILE
+        || type == META_DIR) {
+        start += 8;
+        uint32_t namelen = m_fs->dataToNum(m_data, start, 4);
+        start += namelen;
+        while (start % 4 != 0) {
+            ++start;
+        }
+    }
+    uint32_t pos = 4  * m_index + start;
+    if (pos >= m_fs->blockSize() - 4) {
+        uint32_t next_block = m_fs->dataToNum(
+            m_parent,
+            m_fs->blockSize() - 4,
+            4);
+        if (next_block == 0) {
+            return false;
+        }
+        if (!m_fs->getBlock(next_block, m_parent)) {
+            return false;
+        }
+        m_index = 0;
+        pos = 4  * m_index;
+    }
+
+    m_block = m_fs->dataToNum(m_parent, pos, 4);
+    if (m_block == 0) {
+        returnError(false);
+    }
+    return m_fs->getBlock(m_block, m_data);
+}
+
+bool ClothesFS::Iterator::next()
+{
+    ++m_index;
+    return getCurrent();
 }
