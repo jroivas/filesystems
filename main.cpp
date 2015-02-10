@@ -76,7 +76,7 @@ int main(int argc, char **argv)
 
     ClothesFS cloth;
     cloth.setPhysical(&phys);
-    cloth.format();
+    cloth.format("My impressive volume");
     const char *data = "This is\ntest file\n with contents...\n";
     bool res = cloth.addFile(1, "test", data, strlen(data));
 

@@ -131,7 +131,8 @@ void ClothesFS::clearBuffer(uint8_t *buf, uint32_t size)
     }
 }
 
-bool ClothesFS::format()
+bool ClothesFS::format(
+    const char *volid)
 {
     uint8_t buf[m_phys->sectorSize()];
     clearBuffer(buf, m_phys->sectorSize());
@@ -166,11 +167,13 @@ bool ClothesFS::format()
     m_block_in_sectors = m_blocksize / m_phys->sectorSize();
 
     // vol name
-    buf[pos + 0] = 'V';
-    buf[pos + 1] = 'O';
-    buf[pos + 2] = 'L';
-    buf[pos + 3] = '4';
-    buf[pos + 4] = '2';
+    if (volid != NULL) {
+        for (uint32_t i = 0; i < 32; ++i) {
+            if (*volid == 0) break;
+            buf[pos + i] = *volid;
+            ++volid;
+        }
+    }
     pos += 32;
 
     // Block 1 is root dir (FIXME)

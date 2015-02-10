@@ -66,7 +66,7 @@ public:
     uint32_t dataToNum(uint8_t *buf, int start, int cnt);
     void numToData(uint64_t num, uint8_t *buf, int start, int cnt);
     bool detect();
-    bool format();
+    bool format(const char *volid);
     bool addFile(
         uint32_t parent,
         const char *name,
