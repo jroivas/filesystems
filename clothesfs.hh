@@ -25,6 +25,36 @@ public:
 class ClothesFS
 {
 public:
+    enum {
+        META_FREE = 0x00,
+        META_FILE = 0x02,
+        META_DIR = 0x04,
+        META_FILE_CONT = 0x08,
+        META_DIR_CONT = 0x10,
+        META_JOURNAL = 0x80
+    };
+    enum {
+        ATTRIB_NONE = 0x00,
+        ATTRIB_EXEC = 0x01,
+        ATTRIB_READ = 0x02,
+        ATTRIB_WRITE = 0x04,
+        ATTRIB_LINK = 0x08,
+        ATTRIB_OEXEC = 0x10,
+        ATTRIB_OREAD = 0x20,
+        ATTRIB_OWRITE = 0x40,
+        ATTRIB_SPECIAL = 0x80
+    };
+    enum {
+        PAYLOAD_FREE = 0x00,
+        PAYLOAD_USED = 0x01,
+        PAYLOAD_FREED = 0x02
+    };
+    enum {
+        ALGO_DISABLED = 0x00,
+        ALGO_XOR = 0x01,
+        ALGO_CRC = 0x02,
+        ALGO_SUMMOD = 0x04
+    };
     ClothesFS();
     ~ClothesFS();
 

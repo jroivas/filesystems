@@ -4,6 +4,8 @@
 #include <sys/time.h>
 
 static uint32_t header_begin = 8 * 4;
+static uint32_t metadata_id = 0x42;
+static uint32_t payload_id = 0x4242;
 
 #define returnError(X) do { printf("ERROR @%d\n", __LINE__); return (X); } while(0);
 
@@ -103,7 +105,7 @@ bool ClothesFS::formatBlock(uint32_t num, uint32_t next)
     uint8_t buf[m_blocksize];
     clearBuffer(buf, m_blocksize);
 
-    numToData(0x42, buf, 0, 4);
+    numToData(metadata_id, buf, 0, 4);
     numToData(next, buf, m_blocksize - 4, 4);
 
     return putBlock(num, buf);
@@ -213,9 +215,9 @@ bool ClothesFS::initMeta(
     uint8_t data[m_blocksize];
     clearBuffer(data, m_blocksize);
 
-    numToData(0x42, data, 0, 2);
+    numToData(metadata_id, data, 0, 2);
     numToData(type, data, 2, 1);
-    numToData(0x00, data, 3, 1);
+    numToData(ATTRIB_NONE, data, 3, 1);
 
     return putBlock(index, data);
 }
@@ -228,7 +230,7 @@ uint32_t ClothesFS::initData(
     uint8_t data[m_blocksize];
     clearBuffer(data, m_blocksize);
 
-    numToData(0x4242, data, 0, 2);
+    numToData(payload_id, data, 0, 2);
     numToData(type, data, 2, 1);
     numToData(algo, data, 3, 1);
 
@@ -277,8 +279,8 @@ bool ClothesFS::dirContinues(
 
 uint8_t ClothesFS::baseType(uint8_t type) const
 {
-    if (type == 0x08) type = 0x02;
-    else if (type == 0x10) type = 0x04;
+    if (type == META_FILE_CONT) type = META_FILE;
+    else if (type == META_DIR_CONT) type = META_DIR;
     return type;
 }
 
@@ -301,7 +303,7 @@ bool ClothesFS::addToMeta(
     }
 
     uint32_t id = dataToNum(data, 0, 2);
-    if (id != 0x0042) {
+    if (id != metadata_id) {
         returnError(false);
     }
 
@@ -312,8 +314,8 @@ bool ClothesFS::addToMeta(
     }
 
     uint32_t ptr = 4;
-    if (type == 0x02
-        || type == 0x04) {
+    if (type == META_FILE
+        || type == META_DIR) {
         ptr += 8;
         uint32_t namelen = dataToNum(data, ptr, 4);
         ptr += namelen;
@@ -335,9 +337,14 @@ bool ClothesFS::addToMeta(
     }
 
     next = takeFreeBlock();
+    uint32_t next_type = META_DIR_CONT;
+    if (type == META_FILE
+        || type == META_FILE_CONT) {
+        next_type = META_FILE_CONT;
+    }
     if (next != 0) {
         if (dirContinues(index, next)
-            && initMeta(next, 0x10)) {
+            && initMeta(next, next_type)) {
             return addToMeta(next, meta, type);
         }
     }
@@ -354,11 +361,11 @@ bool ClothesFS::addData(
     if (data_block == 0) {
         returnError(false);
     }
-    if (!addToMeta(meta, data_block, 0x02)) {
+    if (!addToMeta(meta, data_block, META_FILE)) {
         returnError(false);
     }
 
-    uint32_t pos = initData(data_block, 0x01, 0);
+    uint32_t pos = initData(data_block, PAYLOAD_USED, 0);
     uint8_t data[m_blocksize];
     if (!getBlock(data_block, data)) {
         returnError(false);
@@ -431,10 +438,10 @@ bool ClothesFS::addFile(
     if (block == 0) {
         returnError(false);
     }
-    if (!addToMeta(parent, block, 0x04)) {
+    if (!addToMeta(parent, block, META_DIR)) {
         returnError(false);
     }
-    if (!initMeta(block, 0x02)) {
+    if (!initMeta(block, META_FILE)) {
         returnError(false);
     }
     if (!updateMeta(block, (uint8_t*)name, size)) {
