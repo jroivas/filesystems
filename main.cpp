@@ -75,20 +75,35 @@ protected:
 
 int main(int argc, char **argv)
 {
-    FilePhys phys("test.img", 1024 * 10);
+    FilePhys phys("test.img", 1024 * 40);
 
     ClothesFS cloth;
     cloth.setPhysical(&phys);
     cloth.format("My impressive volume");
     const char *data = "This is\ntest file\n with contents...\n";
     bool res = cloth.addFile(1, "test", data, strlen(data));
-    res = cloth.addFile(1, "dummy", "dummy", 5);
+    res = cloth.addFile(1, "dummy", "4dummy2", 7);
+    FILE *tmpf = fopen("test.md", "r");
+    char *fdata = new char[7000];
+    if (tmpf != NULL) {
+        size_t cnt = fread(fdata, 1, 7000, tmpf);
+        fclose(tmpf);
+        res = cloth.addFile(1, "test.md", fdata, cnt);
+    }
 
     printf("ok: %d %d\n", cloth.detect(), res);
 
     ClothesFS::Iterator iter = cloth.list(1);
     while (iter.ok()) {
         printf("%5lu   %s\n", iter.size(), iter.name().c_str());
+        if (iter.size() < 100) {
+            char daa[200];
+            uint64_t getd = iter.read((uint8_t*)daa, 200);
+            for (uint64_t a = 0; a < getd; ++a) {
+                printf("%c", daa[a]);
+            }
+            printf("\n");
+        }
         if (!iter.next()) break;
     }
 }

@@ -469,6 +469,7 @@ ClothesFS::Iterator ClothesFS::list(
 
     iter.m_parent = new uint8_t[m_blocksize];
     iter.m_data = new uint8_t[m_blocksize];
+    iter.m_content = new uint8_t[m_blocksize];
     iter.m_fs = this;
 
     if (!getBlock(parent, iter.m_parent)) {
@@ -523,10 +524,84 @@ bool ClothesFS::Iterator::getCurrent()
     return m_fs->getBlock(m_block, m_data);
 }
 
+uint64_t ClothesFS::Iterator::read(
+    uint8_t *buf,
+    uint64_t cnt)
+{
+    uint32_t type = dataToNum(m_data, 2, 1);
+/*
+    if (type != META_FILE
+        || type != META_FILE_CONT) {
+        returnError(0);
+    }
+*/
+
+    if ((m_pos == 0 && m_data_block == 0)
+        || m_pos >= m_fs->blockSize()) {
+        // FIXME: store pos
+        uint32_t start = 4;
+        if (type == META_FILE) {
+            start += 8;
+            uint32_t namelen = m_fs->dataToNum(m_data, start, 4);
+            start += 4;
+            start += namelen;
+            while (start % 4 != 0) {
+                ++start;
+            }
+        }
+        uint32_t pos = 4  * m_data_index + start;
+        if (pos >= m_fs->blockSize() - 4) {
+            uint32_t next_block = m_fs->dataToNum(
+                m_data,
+                m_fs->blockSize() - 4,
+                4);
+            if (next_block == 0) {
+                return false;
+            }
+            if (!m_fs->getBlock(next_block, m_data)) {
+                return false;
+            }
+            m_data_index = 0;
+            pos = 4  * m_data_index;
+        }
+
+        m_data_block = m_fs->dataToNum(m_data, pos, 4);
+        if (m_data_block == 0) {
+            returnError(0);
+        }
+        if (!m_fs->getBlock(m_data_block, m_content)) {
+            return 0;
+        }
+        if (m_fs->dataToNum(m_content, 0, 2) != 0x4242) {
+            return 0;
+        }
+        if (m_fs->dataToNum(m_content, 2, 1) != PAYLOAD_USED) {
+            return 0;
+        }
+        //FIXME algo
+        m_pos = 4;
+    }
+
+    uint8_t *dest = buf;
+    uint64_t got = 0;
+    while (m_pos < m_fs->blockSize() && cnt > 0) {
+        *dest = m_content[m_pos];
+        ++m_pos;
+        ++dest;
+        --cnt;
+        ++got;
+    }
+
+    return got;
+}
+
 bool ClothesFS::Iterator::next()
 {
     ++m_index;
     m_ok = getCurrent();
+    m_pos = 0;
+    m_data_block = 0;
+    m_data_index = 0;
     return m_ok;
 }
 

@@ -64,6 +64,9 @@ public:
             : m_ok(false),
             m_block(0),
             m_index(0),
+            m_pos(0),
+            m_data_block(0),
+            m_data_index(0),
             m_fs(NULL),
             m_parent(NULL),
             m_data(NULL)
@@ -73,6 +76,9 @@ public:
             : m_ok(false),
             m_block(blk),
             m_index(index),
+            m_pos(0),
+            m_data_block(0),
+            m_data_index(0),
             m_fs(NULL),
             m_parent(NULL),
             m_data(NULL)
@@ -85,6 +91,9 @@ public:
             }
             if (m_data != NULL) {
                 delete[] m_data;
+            }
+            if (m_content != NULL) {
+                delete[] m_content;
             }
         }
         bool next();
@@ -99,6 +108,7 @@ public:
         std::string name();
         uint32_t nameLen();
         uint64_t size();
+        uint64_t read(uint8_t *buf, uint64_t cnt);
 
     protected:
         bool getCurrent();
@@ -106,10 +116,14 @@ public:
         bool m_ok;
         uint32_t m_block;
         uint32_t m_index;
+        uint64_t m_pos;
+        uint32_t m_data_block;
+        uint32_t m_data_index;
 
         ClothesFS *m_fs;
         uint8_t *m_parent;
         uint8_t *m_data;
+        uint8_t *m_content;
     };
 
     ClothesFS();
