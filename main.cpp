@@ -82,6 +82,7 @@ int main(int argc, char **argv)
     cloth.format("My impressive volume");
     const char *data = "This is\ntest file\n with contents...\n";
     bool res = cloth.addFile(1, "test", data, strlen(data));
+    cloth.addDir(1, "tmp");
     res = cloth.addFile(1, "dummy", "4dummy2", 7);
     FILE *tmpf = fopen("test.md", "r");
     char *fdata = new char[7000];
@@ -90,12 +91,18 @@ int main(int argc, char **argv)
         fclose(tmpf);
         res = cloth.addFile(1, "test.md", fdata, cnt);
     }
+    cloth.addDir(1, "folder");
 
     printf("ok: %d %d\n", cloth.detect(), res);
 
     ClothesFS::Iterator iter = cloth.list(1);
     while (iter.ok()) {
-        printf("%5lu   %s\n", iter.size(), iter.name().c_str());
+        char type = 'F';
+        if (iter.type() & ClothesFS::META_DIR) {
+            type = 'D';
+        }
+        printf("%c  %5lu   %s\n", type, iter.size(), iter.name().c_str());
+#if 0
         if (iter.size() < 100) {
             char daa[200];
             uint64_t getd = iter.read((uint8_t*)daa, 200);
@@ -104,6 +111,7 @@ int main(int argc, char **argv)
             }
             printf("\n");
         }
+#endif
         if (!iter.next()) break;
     }
 }

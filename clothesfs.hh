@@ -108,6 +108,7 @@ public:
         std::string name();
         uint32_t nameLen();
         uint64_t size();
+        uint8_t type() const;
         uint64_t read(uint8_t *buf, uint64_t cnt);
 
     protected:
@@ -147,6 +148,9 @@ public:
         const char *name,
         const char *contents,
         uint64_t size);
+    bool addDir(
+        uint32_t parent,
+        const char *name);
     ClothesFS::Iterator list(
         uint32_t parent);
 

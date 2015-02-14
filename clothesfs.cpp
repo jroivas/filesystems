@@ -461,6 +461,29 @@ bool ClothesFS::addFile(
     return addData(block, contents, size);
 }
 
+bool ClothesFS::addDir(
+    uint32_t parent,
+    const char *name)
+{
+    if (parent == 0) {
+        returnError(false);
+    }
+    uint32_t block = takeFreeBlock();
+    if (block == 0) {
+        returnError(false);
+    }
+    if (!addToMeta(parent, block, META_DIR)) {
+        returnError(false);
+    }
+    if (!initMeta(block, META_DIR)) {
+        returnError(false);
+    }
+    if (!updateMeta(block, (const uint8_t*)name, 0)) {
+        returnError(false);
+    }
+    return true;
+}
+
 ClothesFS::Iterator ClothesFS::list(
     uint32_t parent)
 {
@@ -629,4 +652,11 @@ uint64_t ClothesFS::Iterator::size()
     if (m_data == NULL) return 0;
 
     return dataToNum(m_data, 4, 8);
+}
+
+uint8_t ClothesFS::Iterator::type() const
+{
+    if (m_data == NULL) return 0;
+
+    return m_fs->baseType(dataToNum(m_data, 2, 1));
 }
