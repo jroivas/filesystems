@@ -92,6 +92,7 @@ int main(int argc, char **argv)
         res = cloth.addFile(1, "test.md", fdata, cnt);
     }
     cloth.addDir(1, "folder");
+    res = cloth.addFile(4, "fileinfolder", "data42.", 7);
 
     printf("ok: %d %d\n", cloth.detect(), res);
 
@@ -101,7 +102,7 @@ int main(int argc, char **argv)
         if (iter.type() & ClothesFS::META_DIR) {
             type = 'D';
         }
-        printf("%c  %5lu   %s\n", type, iter.size(), iter.name().c_str());
+        printf("%c  %5lu   %s   %u\n", type, iter.size(), iter.name().c_str(), iter.block());
 #if 0
         if (iter.size() < 100) {
             char daa[200];

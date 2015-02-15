@@ -110,6 +110,10 @@ public:
         uint64_t size();
         uint8_t type() const;
         uint64_t read(uint8_t *buf, uint64_t cnt);
+        uint32_t block() const
+        {
+            return m_block;
+        }
 
     protected:
         bool getCurrent();
