@@ -274,6 +274,37 @@ uint32_t ClothesFS::takeFreeBlock()
     return freechain;
 }
 
+bool ClothesFS::addFreeBlock(uint32_t id)
+{
+    if (id == 0) return false;
+
+    uint8_t data[m_blocksize];
+    uint8_t block[m_blocksize];
+
+    if (!getBlock(0, data)) {
+        return false;
+    }
+    if (!getBlock(id, block)) {
+        return false;
+    }
+    uint8_t status = dataToNum(block, 2, 1);
+    if (status == META_FREE) {
+        return false;
+    }
+
+    uint32_t freechain = dataToNum(data, 104, 4);
+
+    numToData(freechain, block, m_blocksize - 4, 4);
+    numToData(0x42, block, 0, 4);
+    numToData(id, data, 104, 4);
+
+    if (!putBlock(0, data)) {
+        return false;
+    }
+
+    return true;
+}
+
 bool ClothesFS::dirContinues(
     uint32_t index,
     uint32_t next)
@@ -488,11 +519,13 @@ ClothesFS::Iterator ClothesFS::list(
     uint32_t parent)
 {
     Iterator iter(parent, 0);
-    if (parent == 0) return iter;
+    if (parent == 0) {
+        returnError(iter);
+    }
 
-    iter.m_parent = new uint8_t[m_blocksize];
-    iter.m_data = new uint8_t[m_blocksize];
-    iter.m_content = new uint8_t[m_blocksize];
+    iter.m_parent = (uint8_t*)new uint8_t[m_blocksize];
+    iter.m_data = (uint8_t*)new uint8_t[m_blocksize];
+    iter.m_content = (uint8_t*)new uint8_t[m_blocksize];
     iter.m_fs = this;
 
     if (!getBlock(parent, iter.m_parent)) {
@@ -585,7 +618,7 @@ uint64_t ClothesFS::Iterator::read(
                 return false;
             }
             m_data_index = 0;
-            pos = 4  * m_data_index;
+            pos = 4  * m_data_index + 4;
         }
 
         m_data_block = m_fs->dataToNum(m_data, pos, 4);
@@ -659,4 +692,56 @@ uint8_t ClothesFS::Iterator::type() const
     if (m_data == NULL) return 0;
 
     return m_fs->baseType(dataToNum(m_data, 2, 1));
+}
+
+bool ClothesFS::Iterator::remove()
+{
+    if (m_data == NULL) return false;
+    m_pos = 0;
+    m_data_block = 0;
+    m_data_index = 0;
+    uint32_t type = dataToNum(m_data, 2, 1);
+    uint32_t the_block = m_block;
+
+    uint32_t start = 4;
+    if (type == META_FILE
+        || type == META_DIR) {
+        start += 8;
+        uint32_t namelen = m_fs->dataToNum(m_data, start, 4);
+        start += 4;
+        start += namelen;
+        while (start % 4 != 0) {
+            ++start;
+        }
+    }
+    uint32_t pos = 4  * m_data_index + start;
+    while (true) {
+        if (pos >= m_fs->blockSize() - 4) {
+            m_fs->addFreeBlock(the_block);
+            uint32_t next_block = m_fs->dataToNum(
+                m_data,
+                m_fs->blockSize() - 4,
+                4);
+            if (next_block == 0) {
+                break;
+            }
+            if (!m_fs->getBlock(next_block, m_data)) {
+                break;
+            }
+            the_block = next_block;
+            m_data_index = 0;
+            pos = 4  * m_data_index + 4;
+        }
+
+        m_data_block = m_fs->dataToNum(m_data, pos, 4);
+        if (m_data_block == 0) {
+            break;
+        }
+        m_fs->addFreeBlock(m_data_block);
+        pos += 4;
+    }
+
+    m_fs->addFreeBlock(the_block);
+
+    return true;
 }

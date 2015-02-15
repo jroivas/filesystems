@@ -98,6 +98,13 @@ int main(int argc, char **argv)
 
     ClothesFS::Iterator iter = cloth.list(1);
     while (iter.ok()) {
+        if (iter.name() == "dummy") {
+            iter.remove();
+        }
+        iter.next();
+    }
+    iter = cloth.list(1);
+    while (iter.ok()) {
         char type = 'F';
         if (iter.type() & ClothesFS::META_DIR) {
             type = 'D';

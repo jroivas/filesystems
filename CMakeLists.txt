@@ -4,6 +4,7 @@ add_definitions(
     -Wstack-protector
     -D_FORTIFY_SOURCE=2
     -Wall
+    -g
 )
 add_executable(clothes
     main.cpp

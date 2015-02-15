@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string>
+#include <string.h>
 
 class ClothesPhys
 {
@@ -95,7 +96,46 @@ public:
             if (m_content != NULL) {
                 delete[] m_content;
             }
+            m_parent = NULL;
+            m_data = NULL;
+            m_content = NULL;
         }
+        Iterator(const Iterator &another)
+            : m_ok(false),
+            m_pos(0),
+            m_data_block(0),
+            m_data_index(0),
+            m_fs(NULL),
+            m_parent(NULL),
+            m_data(NULL)
+        {
+            assign(another);
+        }
+
+        Iterator &operator=(const Iterator &another)
+        {
+            assign(another);
+            return *this;
+        }
+
+        void assign(const Iterator &another)
+        {
+            m_fs = another.m_fs;
+            m_block = another.m_block;
+            m_index = another.m_index;
+            m_data_block = another.m_data_block;
+            m_data_index = another.m_data_index;
+            m_ok = another.m_ok;
+
+            m_parent = new uint8_t[m_fs->m_blocksize];
+            m_data = new uint8_t[m_fs->m_blocksize];
+            m_content = new uint8_t[m_fs->m_blocksize];
+
+            memmove(m_parent, another.m_parent, m_fs->m_blocksize);
+            memmove(m_data, another.m_data, m_fs->m_blocksize);
+            memmove(m_content, another.m_content, m_fs->m_blocksize);
+        }
+
         bool next();
         inline bool ok() const
         {
@@ -114,6 +154,7 @@ public:
         {
             return m_block;
         }
+        bool remove();
 
     protected:
         bool getCurrent();
@@ -160,6 +201,7 @@ public:
 
 protected:
     uint32_t takeFreeBlock();
+    bool addFreeBlock(uint32_t id);
     bool formatBlock(uint32_t num, uint32_t next);
     uint32_t formatBlocks();
     bool getBlock(uint32_t index, uint8_t *buffer);
