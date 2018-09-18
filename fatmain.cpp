@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "fat.hh"
+#include "fs/fat.hh"
 
 int main(int argc, char **argv)
 {

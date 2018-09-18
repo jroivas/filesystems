@@ -19,5 +19,5 @@ add_executable(clothes
 
 add_executable(fat
     fatmain.cpp
-    fat.cpp
+    fs/fat.cpp
     )
