@@ -81,10 +81,13 @@ int main(int argc, char **argv)
     ClothesFS cloth;
     cloth.setPhysical(&phys);
     cloth.format("My impressive volume");
+
     const char *data = "This is\ntest file\n with contents...\n";
     bool res = cloth.addFile(1, "test", data, strlen(data));
+
     cloth.addDir(1, "tmp");
     res = cloth.addFile(1, "dummy", "4dummy2", 7);
+
     FILE *tmpf = fopen("test.md", "r");
     char *fdata = new char[7000];
     if (tmpf != NULL) {
@@ -92,6 +95,7 @@ int main(int argc, char **argv)
         fclose(tmpf);
         res = cloth.addFile(1, "test.md", fdata, cnt);
     }
+
     cloth.addDir(1, "folder");
     res = cloth.addFile(4, "fileinfolder", "data42.", 7);
 
@@ -104,21 +108,27 @@ int main(int argc, char **argv)
         }
         iter.next();
     }
+
     iter = cloth.list(1);
+    printf("%5s %5s %10s  %5s\n", "TYPE", "SIZE", "NAME", "BLOCK");
     while (iter.ok()) {
         char type = 'F';
         if (iter.type() & ClothesFS::META_DIR) {
             type = 'D';
         }
-        printf("%c  %5lu   %s   %u\n", type, iter.size(), iter.name().c_str(), iter.block());
+        printf("%5c %5lu %10s %5u\n", type, iter.size(), iter.name().c_str(), iter.block());
+#if 0
         if (iter.name() == "test") {
+            printf("Dumping file \"test\":\n");
             char *buf = new char[100];
             ssize_t ares = iter.read((uint8_t*)buf, 36);
             for (ssize_t a = 0; a < ares; ++a) {
-                printf("%x %c\n", buf[a], buf[a]);
+                printf("%c", buf[a]);
+                //printf("%x %c\n", buf[a], buf[a]);
             }
             printf("\n");
         }
+#endif
 #if 0
         if (iter.type() & ClothesFS::META_FILE && iter.size() < 100) {
             char daa[200];

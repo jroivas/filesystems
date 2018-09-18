@@ -14,6 +14,9 @@ static uint32_t header_begin = 8 * 4;
 static uint32_t metadata_id = 0x42;
 static uint32_t payload_id = 0x4242;
 
+static const uint32_t MAX_SECTOR_SIZE = 4096;
+static const uint32_t MAX_BLOCK_SIZE = 4096;
+
 #ifdef USE_CUSTOM_STRING
 #define returnError(X)\
 do {\
@@ -44,6 +47,12 @@ ClothesFS::~ClothesFS()
 {
 }
 
+bool ClothesFS::verifySectorSize() const
+{
+    if (m_phys == nullptr) return false;
+    return m_phys->sectorSize() <= MAX_SECTOR_SIZE;
+}
+
 uint32_t ClothesFS::dataToNum(uint8_t *buf, int start, int cnt)
 {
     uint32_t res = 0;
@@ -66,19 +75,19 @@ void ClothesFS::numToData(uint64_t num, uint8_t *buf, int start, int cnt)
 
 bool ClothesFS::detect()
 {
-    if (m_phys == nullptr) {
+    if (m_phys == nullptr || !verifySectorSize()) {
         returnError(false);
     }
 
-    uint8_t buf[m_phys->sectorSize()];
+    uint8_t buf[MAX_SECTOR_SIZE];
     if (!m_phys->read(buf, 1, 0, 0)) {
         returnError(false);
     }
 
     m_blocksize = dataToNum(buf, header_begin + 4, 2);
 
-    return (
-           buf[header_begin + 0] == 0x00
+    return (m_blocksize <= MAX_BLOCK_SIZE
+        && buf[header_begin + 0] == 0x00
         && buf[header_begin + 1] == 0x42
         && buf[header_begin + 2] == 0x00
         && buf[header_begin + 3] == 0x41);
@@ -123,7 +132,7 @@ bool ClothesFS::putBlock(uint32_t index, uint8_t *data)
 
 bool ClothesFS::formatBlock(uint32_t num, uint32_t next)
 {
-    uint8_t buf[m_blocksize];
+    uint8_t buf[MAX_BLOCK_SIZE];
     clearBuffer(buf, m_blocksize);
 
     numToData(metadata_id, buf, 0, 4);
@@ -162,7 +171,9 @@ void ClothesFS::setPhysical(FilesystemPhys *phys)
 bool ClothesFS::format(
     const char *volid)
 {
-    uint8_t buf[m_phys->sectorSize()];
+    if (!verifySectorSize()) return false;
+
+    uint8_t buf[MAX_SECTOR_SIZE];
     clearBuffer(buf, m_phys->sectorSize());
 
     buf[header_begin + 0] = 0x00;
@@ -248,7 +259,7 @@ bool ClothesFS::initMeta(
     uint32_t index,
     uint8_t type)
 {
-    uint8_t data[m_blocksize];
+    uint8_t data[MAX_BLOCK_SIZE];
     clearBuffer(data, m_blocksize);
 
     numToData(metadata_id, data, 0, 2);
@@ -263,7 +274,7 @@ uint32_t ClothesFS::initData(
     uint8_t type,
     uint8_t algo)
 {
-    uint8_t data[m_blocksize];
+    uint8_t data[MAX_BLOCK_SIZE];
     clearBuffer(data, m_blocksize);
 
     numToData(payload_id, data, 0, 2);
@@ -279,8 +290,8 @@ uint32_t ClothesFS::initData(
 
 uint32_t ClothesFS::takeFreeBlock()
 {
-    uint8_t data[m_blocksize];
-    uint8_t block[m_blocksize];
+    uint8_t data[MAX_BLOCK_SIZE];
+    uint8_t block[MAX_BLOCK_SIZE];
     if (!getBlock(0, data)) {
         return 0;
     }
@@ -304,8 +315,8 @@ bool ClothesFS::addFreeBlock(uint32_t id)
 {
     if (id == 0) return false;
 
-    uint8_t data[m_blocksize];
-    uint8_t block[m_blocksize];
+    uint8_t data[MAX_BLOCK_SIZE];
+    uint8_t block[MAX_BLOCK_SIZE];
 
     if (!getBlock(0, data)) {
         return false;
@@ -335,7 +346,7 @@ bool ClothesFS::dirContinues(
     uint32_t index,
     uint32_t next)
 {
-    uint8_t data[m_blocksize];
+    uint8_t data[MAX_BLOCK_SIZE];
     if (!getBlock(index, data)) {
         returnError(false);
     }
@@ -364,7 +375,7 @@ bool ClothesFS::addToMeta(
     uint32_t meta,
     uint8_t type)
 {
-    uint8_t data[m_blocksize];
+    uint8_t data[MAX_BLOCK_SIZE];
     if (!getBlock(index, data)) {
         returnError(false);
     }
@@ -433,7 +444,7 @@ bool ClothesFS::addData(
     }
 
     uint32_t pos = initData(data_block, PAYLOAD_USED, 0);
-    uint8_t data[m_blocksize];
+    uint8_t data[MAX_BLOCK_SIZE];
     if (!getBlock(data_block, data)) {
         returnError(false);
     }
@@ -462,7 +473,7 @@ bool ClothesFS::updateMeta(
     const uint8_t *name,
     uint64_t size)
 {
-    uint8_t data[m_blocksize];
+    uint8_t data[MAX_BLOCK_SIZE];
     if (!getBlock(index, data)) {
         returnError(false);
     }

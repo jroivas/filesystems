@@ -19,6 +19,7 @@
 #include <string>
 #define STD_STRING_TYPE std::string
 #endif
+static const uint32_t FS_BLOCKSIZE = 512;
 
 class ClothesFS
 {
@@ -230,6 +231,8 @@ protected:
 
     uint8_t baseType(uint8_t type) const;
     bool validType(uint8_t type, uint8_t valid) const;
+
+    bool verifySectorSize() const;
 
     FilesystemPhys *m_phys;
     uint32_t m_blocksize;
