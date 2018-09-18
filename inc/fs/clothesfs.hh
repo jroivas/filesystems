@@ -1,28 +1,24 @@
 #ifndef __CLOTHESFS_HH
 #define __CLOTHESFS_HH
 
+#ifdef LINUX_BUILD
 #include <stdint.h>
 #include <stddef.h>
-#include <string>
 #include <string.h>
+#else
+#include <string.hh>
+#include <platform.h>
+#endif
 
-class ClothesPhys
-{
-public:
-    virtual bool read(
-        uint8_t *buffer,
-        uint32_t sectors,
-        uint32_t pos,
-        uint32_t pos_hi) = 0;
-    virtual bool write(
-        uint8_t *buffer,
-        uint32_t sectors,
-        uint32_t pos,
-        uint32_t pos_hi) = 0;
+#include <fs/filesystem.hh>
 
-    virtual uint64_t size() const = 0;
-    virtual uint32_t sectorSize() const = 0;
-};
+#ifdef USE_CUSTOM_STRING
+#include <string.hh>
+#define STD_STRING_TYPE String
+#else
+#include <string>
+#define STD_STRING_TYPE std::string
+#endif
 
 class ClothesFS
 {
@@ -68,9 +64,9 @@ public:
             m_pos(0),
             m_data_block(0),
             m_data_index(0),
-            m_fs(NULL),
-            m_parent(NULL),
-            m_data(NULL)
+            m_fs(nullptr),
+            m_parent(nullptr),
+            m_data(nullptr)
         {
         }
         Iterator(uint32_t blk, uint32_t index)
@@ -80,34 +76,34 @@ public:
             m_pos(0),
             m_data_block(0),
             m_data_index(0),
-            m_fs(NULL),
-            m_parent(NULL),
-            m_data(NULL)
+            m_fs(nullptr),
+            m_parent(nullptr),
+            m_data(nullptr)
         {
         }
         ~Iterator() {
             m_ok = false;
-            if (m_parent != NULL) {
+            if (m_parent != nullptr) {
                 delete[] m_parent;
             }
-            if (m_data != NULL) {
+            if (m_data != nullptr) {
                 delete[] m_data;
             }
-            if (m_content != NULL) {
+            if (m_content != nullptr) {
                 delete[] m_content;
             }
-            m_parent = NULL;
-            m_data = NULL;
-            m_content = NULL;
+            m_parent = nullptr;
+            m_data = nullptr;
+            m_content = nullptr;
         }
         Iterator(const Iterator &another)
             : m_ok(false),
             m_pos(0),
             m_data_block(0),
             m_data_index(0),
-            m_fs(NULL),
-            m_parent(NULL),
-            m_data(NULL)
+            m_fs(nullptr),
+            m_parent(nullptr),
+            m_data(nullptr)
         {
             assign(another);
         }
@@ -127,13 +123,33 @@ public:
             m_data_index = another.m_data_index;
             m_ok = another.m_ok;
 
-            m_parent = new uint8_t[m_fs->m_blocksize];
-            m_data = new uint8_t[m_fs->m_blocksize];
-            m_content = new uint8_t[m_fs->m_blocksize];
+            if (m_fs != nullptr) {
+                m_parent = new uint8_t[m_fs->m_blocksize];
+                m_data = new uint8_t[m_fs->m_blocksize];
+                m_content = new uint8_t[m_fs->m_blocksize];
 
-            memmove(m_parent, another.m_parent, m_fs->m_blocksize);
-            memmove(m_data, another.m_data, m_fs->m_blocksize);
-            memmove(m_content, another.m_content, m_fs->m_blocksize);
+#ifdef LINUX_BUILD
+                if (another.m_parent != nullptr) {
+                    memmove(m_parent, another.m_parent, m_fs->m_blocksize);
+                }
+                if (another.m_data != nullptr) {
+                    memmove(m_data, another.m_data, m_fs->m_blocksize);
+                }
+                if (another.m_content != nullptr) {
+                    memmove(m_content, another.m_content, m_fs->m_blocksize);
+                }
+#else
+                if (another.m_parent != nullptr) {
+                    Mem::move(m_parent, another.m_parent, m_fs->m_blocksize);
+                }
+                if (another.m_data != nullptr) {
+                    Mem::move(m_data, another.m_data, m_fs->m_blocksize);
+                }
+                if (another.m_content != nullptr) {
+                    Mem::move(m_content, another.m_content, m_fs->m_blocksize);
+                }
+#endif
+            }
         }
 
         bool next();
@@ -145,7 +161,7 @@ public:
         {
             return m_data;
         }
-        std::string name();
+        STD_STRING_TYPE name();
         uint32_t nameLen();
         uint64_t size();
         uint8_t type() const;
@@ -175,10 +191,7 @@ public:
     ClothesFS();
     ~ClothesFS();
 
-    void setPhysical(ClothesPhys *phys)
-    {
-        m_phys = phys;
-    }
+    void setPhysical(FilesystemPhys *phys);
     inline uint32_t blockSize() const
     {
         return m_blocksize;
@@ -218,7 +231,7 @@ protected:
     uint8_t baseType(uint8_t type) const;
     bool validType(uint8_t type, uint8_t valid) const;
 
-    ClothesPhys *m_phys;
+    FilesystemPhys *m_phys;
     uint32_t m_blocksize;
     uint32_t m_blocks;
     uint32_t m_freechain;

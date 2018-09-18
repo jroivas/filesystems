@@ -1,26 +1,43 @@
-#include "clothesfs.hh"
+#include "fs/clothesfs.hh"
+
+#ifdef LINUX_BUILD
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/time.h>
+#else
+#include <errno.h>
+#include <fcntl.h>
+#include <platform.h>
+#endif
 
 static uint32_t header_begin = 8 * 4;
 static uint32_t metadata_id = 0x42;
 static uint32_t payload_id = 0x4242;
 
+#ifdef USE_CUSTOM_STRING
+#define returnError(X)\
+do {\
+    Platform::video()->printf("ERROR @%d  %s\n", __LINE__, __PRETTY_FUNCTION__);\
+    return (X);\
+} while(0);
+#else
 #define returnError(X)\
 do {\
     printf("ERROR @%d  %s\n", __LINE__, __PRETTY_FUNCTION__);\
     return (X);\
 } while(0);
+#endif
 
 ClothesFS::ClothesFS()
-    : m_phys(NULL),
+    : m_phys(nullptr),
     m_blocksize(512)
 {
+#ifdef LINUX_BUILD
     struct timeval tv;
-    gettimeofday(&tv, NULL);
+    gettimeofday(&tv, nullptr);
 
     srand(tv.tv_sec + tv.tv_usec);
+#endif
 }
 
 ClothesFS::~ClothesFS()
@@ -49,7 +66,7 @@ void ClothesFS::numToData(uint64_t num, uint8_t *buf, int start, int cnt)
 
 bool ClothesFS::detect()
 {
-    if (m_phys == NULL) {
+    if (m_phys == nullptr) {
         returnError(false);
     }
 
@@ -135,6 +152,13 @@ void ClothesFS::clearBuffer(uint8_t *buf, uint32_t size)
     }
 }
 
+void ClothesFS::setPhysical(FilesystemPhys *phys)
+{
+    m_phys = phys;
+    m_blocks = m_phys->size() / m_blocksize;
+    m_block_in_sectors = m_blocksize / m_phys->sectorSize();
+}
+
 bool ClothesFS::format(
     const char *volid)
 {
@@ -159,9 +183,11 @@ bool ClothesFS::format(
     pos += 2;
 
     // vol id
+#ifndef USE_CUSTOM_STRING
     for (int i = 0; i < 8; ++i) {
         buf[pos + i] = rand() % 0xFF;
     }
+#endif
     pos += 8;
 
     // size
@@ -171,7 +197,7 @@ bool ClothesFS::format(
     m_block_in_sectors = m_blocksize / m_phys->sectorSize();
 
     // vol name
-    if (volid != NULL) {
+    if (volid != nullptr) {
         for (uint32_t i = 0; i < 32; ++i) {
             if (*volid == 0) break;
             buf[pos + i] = *volid;
@@ -450,7 +476,7 @@ bool ClothesFS::updateMeta(
     numToData(size, data, 4, 8);
     uint32_t len = 0;
     uint32_t pos = 16;
-    while (name != NULL
+    while (name != nullptr
         && *name != 0) {
         data[pos] = *name;
         ++pos;
@@ -523,6 +549,7 @@ ClothesFS::Iterator ClothesFS::list(
         returnError(iter);
     }
 
+    // FIXME free old
     iter.m_parent = (uint8_t*)new uint8_t[m_blocksize];
     iter.m_data = (uint8_t*)new uint8_t[m_blocksize];
     iter.m_content = (uint8_t*)new uint8_t[m_blocksize];
@@ -575,7 +602,7 @@ bool ClothesFS::Iterator::getCurrent()
 
     m_block = m_fs->dataToNum(m_parent, pos, 4);
     if (m_block == 0) {
-        returnError(false);
+        return false;
     }
     return m_fs->getBlock(m_block, m_data);
 }
@@ -605,6 +632,7 @@ uint64_t ClothesFS::Iterator::read(
                 ++start;
             }
         }
+
         uint32_t pos = 4  * m_data_index + start;
         if (pos >= m_fs->blockSize() - 4) {
             uint32_t next_block = m_fs->dataToNum(
@@ -663,16 +691,16 @@ bool ClothesFS::Iterator::next()
 
 uint32_t ClothesFS::Iterator::nameLen()
 {
-    if (m_data == NULL) return 0;
+    if (m_data == nullptr) return 0;
 
     return dataToNum(m_data, 12, 4);
 }
 
-std::string ClothesFS::Iterator::name()
+STD_STRING_TYPE ClothesFS::Iterator::name()
 {
-    if (m_data == NULL) return NULL;
+    if (m_data == nullptr) return "";
 
-    std::string res;
+    STD_STRING_TYPE res;
     uint32_t namelen = nameLen();
     for (uint32_t i = 0; i < namelen; ++i) {
         res += (char)m_data[16 + i];
@@ -682,21 +710,21 @@ std::string ClothesFS::Iterator::name()
 
 uint64_t ClothesFS::Iterator::size()
 {
-    if (m_data == NULL) return 0;
+    if (m_data == nullptr) return 0;
 
     return dataToNum(m_data, 4, 8);
 }
 
 uint8_t ClothesFS::Iterator::type() const
 {
-    if (m_data == NULL) return 0;
+    if (m_data == nullptr) return 0;
 
     return m_fs->baseType(dataToNum(m_data, 2, 1));
 }
 
 bool ClothesFS::Iterator::remove()
 {
-    if (m_data == NULL) return false;
+    if (m_data == nullptr) return false;
     m_pos = 0;
     m_data_block = 0;
     m_data_index = 0;

@@ -1,10 +1,11 @@
-#include "clothesfs.hh"
+#include "fs/filesystem.hh"
+#include "fs/clothesfs.hh"
 #include <string>
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
 
-class FilePhys : public ClothesPhys
+class FilePhys : public FilesystemPhys
 {
 public:
     FilePhys(std::string fname, uint32_t maxsize)
@@ -110,10 +111,22 @@ int main(int argc, char **argv)
             type = 'D';
         }
         printf("%c  %5lu   %s   %u\n", type, iter.size(), iter.name().c_str(), iter.block());
+        if (iter.name() == "test") {
+            char *buf = new char[100];
+            ssize_t ares = iter.read((uint8_t*)buf, 36);
+            for (ssize_t a = 0; a < ares; ++a) {
+                printf("%x %c\n", buf[a], buf[a]);
+            }
+            printf("\n");
+        }
 #if 0
-        if (iter.size() < 100) {
+        if (iter.type() & ClothesFS::META_FILE && iter.size() < 100) {
             char daa[200];
-            uint64_t getd = iter.read((uint8_t*)daa, 200);
+            uint64_t getd = iter.read((uint8_t*)daa, 10);
+            for (uint64_t a = 0; a < getd; ++a) {
+                printf("%c", daa[a]);
+            }
+            getd = iter.read((uint8_t*)daa, 10);
             for (uint64_t a = 0; a < getd; ++a) {
                 printf("%c", daa[a]);
             }
