@@ -81,17 +81,22 @@ int clothesfs_fill_super(struct super_block *sb, void *data, int silent)
 
 	csb = (struct clothesfs_super_block *)(bh->b_data);
 	sbi->super = csb;
-        sb->s_magic = le16_to_cpu(csb->id);
+        sb->s_magic = be32_to_cpu(csb->id);
 
 	if (sb->s_magic != CLOTHESFS_SUPER_MAGIC)
 		goto cant_find_clothes;
 
 	//clothesfs_read_
 
+	goto temp_fail;
 	return 0;
 
+temp_fail:
+	clothesfs_msg(sb, KERN_ERR, "Temporary fail, all ok");
+	goto out_fail;
+
 cant_find_clothes:
-	clothesfs_msg(sb, KERN_ERR, "Can't find ClothesFS filesystem");
+	clothesfs_msg(sb, KERN_ERR, "Can't find ClothesFS filesystem %x != %x != %x", sb->s_magic, csb->id, CLOTHESFS_SUPER_MAGIC);
 
 out_fail:
         sb->s_fs_info = NULL;
