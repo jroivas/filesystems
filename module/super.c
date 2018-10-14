@@ -1,6 +1,7 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/fs.h>
+#include <linux/statfs.h>
 #include <linux/slab.h>
 #include <linux/buffer_head.h>
 
@@ -12,6 +13,11 @@ static struct kmem_cache *clothesfs_inode_cachep;
 static inline struct clothesfs_inode_info *CLOTHESFS_I(struct inode *inode)
 {
         return container_of(inode, struct clothesfs_inode_info, vfs_inode);
+}
+
+static inline struct clothesfs_sb_info *CLOTHESFS_SB(struct super_block *sb)
+{
+        return sb->s_fs_info;
 }
 
 static struct inode *clothesfs_alloc_inode(struct super_block *sb)
@@ -40,13 +46,28 @@ static int clothesfs_remount(struct super_block *sb, int *flags, char *data)
         return 0;
 }
 
+static int clothesfs_statfs(struct dentry *dentry, struct kstatfs *buf)
+{
+        struct super_block *sb = dentry->d_sb;
+	struct clothesfs_sb_info *sbi;
+
+	sbi = CLOTHESFS_SB(sb);
+
+	buf->f_type = CLOTHESFS_SUPER_MAGIC;
+        buf->f_namelen = CLOTHESFS_MAX_FN_LEN;
+        buf->f_bsize = sbi->blocksize;
+        buf->f_bfree = buf->f_bavail = buf->f_ffree;
+        buf->f_blocks = sbi->size / sbi->blocksize;
+        buf->f_fsid.val[0] = (u32)sbi->vol_id;
+        buf->f_fsid.val[1] = (u32)(sbi->vol_id >> 32);
+
+	return 0;
+}
 
 static const struct super_operations clothesfs_super_ops = {
         .alloc_inode    = clothesfs_alloc_inode,
         .destroy_inode  = clothesfs_destroy_inode,
-/*
         .statfs         = clothesfs_statfs,
-*/
         .remount_fs     = clothesfs_remount,
 };
 
@@ -91,11 +112,47 @@ out:
 	return error;
 }
 
+/*
+static const struct inode_operations clothesfs_dir_inode_operations = {
+        .lookup = clothesfs_lookup,
+};
+*/
+
+
+static struct inode *clothesfs_get_root(struct super_block *sb, int pos)
+{
+	struct clothesfs_inode_info *ci;
+	umode_t mode;
+	struct inode *inode = iget_locked(sb, pos);
+
+	if (!inode)
+		return ERR_PTR(-ENOMEM);
+
+	if (!(inode->i_state & I_NEW))
+		return inode;
+
+
+	inode->i_ino = get_next_ino();
+	mode = S_IFDIR | 0755;
+
+	set_nlink(inode, 1);
+	inode->i_size = 0;
+        inode->i_mtime.tv_sec = inode->i_atime.tv_sec = inode->i_ctime.tv_sec = 0;
+        inode->i_mtime.tv_nsec = inode->i_atime.tv_nsec = inode->i_ctime.tv_nsec = 0;
+	//inode->i_op = 
+
+	ci = CLOTHESFS_I(inode);
+
+	unlock_new_inode(inode);
+	return inode;
+}
+
 int clothesfs_fill_super(struct super_block *sb, void *data, int silent)
 {
 	struct clothesfs_sb_info *sbi;
 	struct clothesfs_super_block *csb;
 	struct buffer_head *bh;
+	struct inode *inode;
 	long error;
 
         sbi = kzalloc(sizeof(struct clothesfs_sb_info), GFP_KERNEL);
@@ -110,7 +167,6 @@ int clothesfs_fill_super(struct super_block *sb, void *data, int silent)
 
         sb->s_op = &clothesfs_super_ops;
         mutex_init(&sbi->s_lock);
-
 
 	sb_min_blocksize(sb, 512);
 	bh = sb_bread(sb, 0);
@@ -131,12 +187,23 @@ int clothesfs_fill_super(struct super_block *sb, void *data, int silent)
 	if (error)
 		goto out_fail;
 
-	goto temp_fail;
-	return 0;
+	brelse(bh);
 
-temp_fail:
-	clothesfs_msg(sb, KERN_ERR, "Temporary fail, all ok");
-	goto out_fail;
+	sb->s_maxbytes = MAX_LFS_FILESIZE;
+	if (sb->s_blocksize != sbi->blocksize) {
+		clothesfs_msg(sb, KERN_ERR, "Blocksize: %d != %d\n", sb->s_blocksize, sbi->blocksize);
+		// TODO
+	}
+
+	inode = clothesfs_get_root(sb, csb->root);
+	sb->s_root = d_make_root(inode);
+	if (!sb->s_root) {
+		error = -ENOMEM;
+		goto out_fail;
+	}
+
+	clothesfs_msg(sb, KERN_ERR, "All ok");
+	goto out;
 
 cant_find_clothes:
 	clothesfs_msg(sb, KERN_ERR, "Can't find ClothesFS filesystem %x != %x != %x", sb->s_magic, csb->id, CLOTHESFS_SUPER_MAGIC);
@@ -145,6 +212,8 @@ out_fail:
 	if (error == 0) error = -EINVAL;
 	sb->s_fs_info = NULL;
 	kfree(sbi);
+
+out:
 	return error;
 }
 

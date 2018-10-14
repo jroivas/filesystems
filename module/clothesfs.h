@@ -5,6 +5,7 @@
 #include <asm/byteorder.h>
 
 #define CLOTHESFS_SUPER_MAGIC 0x41004200
+#define CLOTHESFS_MAX_FN_LEN 100
 
 struct clothesfs_super_block {
 	__u64 jump1;
