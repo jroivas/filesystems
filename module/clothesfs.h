@@ -4,7 +4,7 @@
 #include <linux/fs.h>
 #include <asm/byteorder.h>
 
-#define CLOTHESFS_SUPER_MAGIC 0x00420041
+#define CLOTHESFS_SUPER_MAGIC 0x41004200
 
 struct clothesfs_super_block {
 	__u64 jump1;
@@ -31,7 +31,7 @@ struct clothesfs_sb_info {
 	unsigned char grpindex;
 	unsigned long vol_id;
 	unsigned long size;
-	char name[32];
+	char name[33];
 	unsigned int root;
 	unsigned int used;
 	unsigned int journal1;

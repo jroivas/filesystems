@@ -55,7 +55,7 @@ static int clothesfs_read_super(struct super_block *sb,
 {
 	int error = -EINVAL;
 
-	sbi->blocksize = be16_to_cpu(csb->blocksize);
+	sbi->blocksize = le16_to_cpu(csb->blocksize);
 	sbi->flags = csb->flags;
 	sbi->grpindex = csb->grpindex;
 	sbi->vol_id = le64_to_cpu(csb->vol_id);
@@ -65,6 +65,8 @@ static int clothesfs_read_super(struct super_block *sb,
 	sbi->journal1 = le32_to_cpu(csb->journal1);
 	sbi->journal2 = le32_to_cpu(csb->journal2);
 	sbi->freechain = le32_to_cpu(csb->freechain);
+	memcpy(sbi->name, csb->name, 32);
+	sbi->name[32] = 0;
 
 	if (!sbi->vol_id) {
 		clothesfs_msg(sb, KERN_ERR, "Invalid volume id: %x", sbi->vol_id);
@@ -81,6 +83,8 @@ static int clothesfs_read_super(struct super_block *sb,
 		goto out;
 	}
 	clothesfs_msg(sb, KERN_ERR, "DBG size: %lu", sbi->size);
+
+	clothesfs_msg(sb, KERN_ERR, "DBG name: %s", sbi->name);
 
 	error = 0;
 out:
@@ -118,7 +122,7 @@ int clothesfs_fill_super(struct super_block *sb, void *data, int silent)
 
 	csb = (struct clothesfs_super_block *)(bh->b_data);
 	sbi->super = csb;
-        sb->s_magic = be32_to_cpu(csb->id);
+        sb->s_magic = le32_to_cpu(csb->id);
 
 	if (sb->s_magic != CLOTHESFS_SUPER_MAGIC)
 		goto cant_find_clothes;
@@ -138,9 +142,10 @@ cant_find_clothes:
 	clothesfs_msg(sb, KERN_ERR, "Can't find ClothesFS filesystem %x != %x != %x", sb->s_magic, csb->id, CLOTHESFS_SUPER_MAGIC);
 
 out_fail:
-        sb->s_fs_info = NULL;
-        kfree(sbi);
-        return error;
+	if (error == 0) error = -EINVAL;
+	sb->s_fs_info = NULL;
+	kfree(sbi);
+	return error;
 }
 
 
