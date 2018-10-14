@@ -18,7 +18,6 @@ struct clothesfs_super_block {
 	__u64 vol_id;
 	__u64 size;
 	__u8  name[32];
-	__u64 group_id;
 	__u32 root;
 	__u32 used;
 	__u32 journal1;
@@ -33,7 +32,6 @@ struct clothesfs_sb_info {
 	unsigned long vol_id;
 	unsigned long size;
 	char name[32];
-	unsigned long group_id;
 	unsigned int root;
 	unsigned int used;
 	unsigned int journal1;

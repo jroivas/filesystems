@@ -50,6 +50,43 @@ static const struct super_operations clothesfs_super_ops = {
         .remount_fs     = clothesfs_remount,
 };
 
+static int clothesfs_read_super(struct super_block *sb,
+	struct clothesfs_sb_info *sbi, struct clothesfs_super_block *csb)
+{
+	int error = -EINVAL;
+
+	sbi->blocksize = be16_to_cpu(csb->blocksize);
+	sbi->flags = csb->flags;
+	sbi->grpindex = csb->grpindex;
+	sbi->vol_id = le64_to_cpu(csb->vol_id);
+	sbi->size = le64_to_cpu(csb->size);
+	sbi->root = le32_to_cpu(csb->root);
+	sbi->used = le32_to_cpu(csb->used);
+	sbi->journal1 = le32_to_cpu(csb->journal1);
+	sbi->journal2 = le32_to_cpu(csb->journal2);
+	sbi->freechain = le32_to_cpu(csb->freechain);
+
+	if (!sbi->vol_id) {
+		clothesfs_msg(sb, KERN_ERR, "Invalid volume id: %x", sbi->vol_id);
+		goto out;
+	}
+	clothesfs_msg(sb, KERN_ERR, "DBG volume id: %x", sbi->vol_id);
+	if (!sbi->root) {
+		clothesfs_msg(sb, KERN_ERR, "Invalid root position: %x != %x", sbi->root, csb->root);
+		goto out;
+	}
+	clothesfs_msg(sb, KERN_ERR, "DBG root position: %x", sbi->root);
+	if (!sbi->size) {
+		clothesfs_msg(sb, KERN_ERR, "Invalid size: %lu", sbi->size);
+		goto out;
+	}
+	clothesfs_msg(sb, KERN_ERR, "DBG size: %lu", sbi->size);
+
+	error = 0;
+out:
+	return error;
+}
+
 int clothesfs_fill_super(struct super_block *sb, void *data, int silent)
 {
 	struct clothesfs_sb_info *sbi;
@@ -86,7 +123,9 @@ int clothesfs_fill_super(struct super_block *sb, void *data, int silent)
 	if (sb->s_magic != CLOTHESFS_SUPER_MAGIC)
 		goto cant_find_clothes;
 
-	//clothesfs_read_
+	error = clothesfs_read_super(sb, sbi, csb);
+	if (error)
+		goto out_fail;
 
 	goto temp_fail;
 	return 0;
