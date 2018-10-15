@@ -31,21 +31,20 @@ struct clothesfs_super_block {
 	__u32 journal1;
 	__u32 journal2;
 	__u32 freechain;
-};
+} __attribute__((packed));
 
 struct clothesfs_meta_block {
 	__u16 id;
 	__u8  type;
 	__u8  attrib;
+	__u64 size;
+	__u32 namelen;
 	union {
-		struct {
-			__u64 size;
-			__u32 namelen;
-		};
-		__u8  data[512 - 2 - 1 - 1 - 4];
+		__u32 payload[123];
+		__u8  name[492];
 	};
 	__u32 ptr;
-};
+} __attribute__((packed));
 
 struct clothesfs_sb_info {
 	unsigned short blocksize;

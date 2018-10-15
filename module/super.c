@@ -118,10 +118,10 @@ static int clothesfs_block_read(struct super_block *sb, unsigned int pos,
 	struct buffer_head *bh;
 	unsigned int offset;
 	size_t block_cnt;
-	size_t segment;
 
 	block_cnt = buflen / CLOTHESFS_BASE_BLOCK_SIZE;
 	offset = 0;
+	clothesfs_msg(sb, KERN_ERR, "Read from %x, %d bytes", pos, buflen);
 
 	while (block_cnt > 0) {
 		bh = sb_bread(sb, pos);
@@ -138,6 +138,73 @@ static int clothesfs_block_read(struct super_block *sb, unsigned int pos,
 	return 0;
 }
 
+static int clothesfs_emit_dir_block(struct dir_context *ctx, struct super_block *sb, struct clothesfs_meta_block *meta)
+{
+	int error = 0;
+	char buf[sb->s_blocksize];
+	struct clothesfs_meta_block *entry_meta;
+
+	unsigned int ipos = 0;
+	unsigned int type;
+	int i;
+	char *fname;
+	unsigned int namelen;
+	int index;
+	namelen = meta->namelen;
+	index = le32_to_cpu(namelen) / 4;
+	clothesfs_msg(sb, KERN_ERR, "FF: %d, %d, %d", index, namelen, meta->namelen);
+
+	if (namelen % 4 != 0)
+		++index;
+
+	clothesfs_msg(sb, KERN_ERR, "Iter from: %d, %d", index, namelen);
+	clothesfs_msg(sb, KERN_ERR, "Folder name: %s", meta->name);
+	for (i = index; i < 123; ++i) {
+		clothesfs_msg(sb, KERN_ERR, "Pos: %d, %d", i, ipos);
+		ipos = meta->payload[i];
+		if (ipos == 0)
+			break;
+
+		ctx->pos = ipos;
+		error = clothesfs_block_read(sb, ipos, &buf, sb->s_blocksize);
+		entry_meta = (struct clothesfs_meta_block *)buf;
+		if (entry_meta->type == CLOTHESFS_META_DIR
+			|| entry_meta->type == CLOTHESFS_META_DIR_EXT)
+			type = DT_DIR;
+		else if (entry_meta->type == CLOTHESFS_META_FILE
+			|| entry_meta->type == CLOTHESFS_META_FILE_EXT)
+			type = DT_REG;
+		else {
+			clothesfs_msg(sb, KERN_ERR, "Invalid entry type %x", entry_meta->type);
+			error = -EINVAL;
+			goto out;
+		}
+		if (entry_meta->namelen <= 0) {
+			clothesfs_msg(sb, KERN_ERR, "Invalid name len: %d", entry_meta->namelen);
+			error = -EINVAL;
+			goto out;
+		}
+
+		fname = kzalloc(entry_meta->namelen + 1, GFP_KERNEL);
+		if (fname == NULL) {
+			error = -ENOMEM;
+			goto out;
+		}
+		memcpy(fname, entry_meta->name, entry_meta->namelen);
+		fname[entry_meta->namelen] = 0;
+
+		clothesfs_msg(sb, KERN_ERR, "Found: %s", fname);
+		if (!dir_emit(ctx, fname, entry_meta->namelen, ipos, type)) {
+			clothesfs_msg(sb, KERN_ERR, "Invalid entry at: %d", i);
+			error = -EINVAL;
+			goto out;
+		}
+	}
+
+out:
+	return error;
+}
+
 static int clothesfs_readdir(struct file *file, struct dir_context *ctx)
 {
 	struct inode *i = file_inode(file);
@@ -145,8 +212,8 @@ static int clothesfs_readdir(struct file *file, struct dir_context *ctx)
 	struct clothesfs_inode_info *ci;
 	int error;
 	unsigned short id;
-	//char buf[i->i_sb->s_blocksize];
-	struct clothesfs_meta_block meta;
+	char buf[i->i_sb->s_blocksize];
+	struct clothesfs_meta_block *meta;
 
 	ci = CLOTHESFS_I(i);
 
@@ -157,26 +224,31 @@ static int clothesfs_readdir(struct file *file, struct dir_context *ctx)
 		clothesfs_msg(i->i_sb, KERN_ERR, "Offs %d", offset);
 		ctx->pos = offset;
 
-		error = clothesfs_block_read(i->i_sb, offset, &meta, sizeof(meta));
+		error = clothesfs_block_read(i->i_sb, offset, &buf, i->i_sb->s_blocksize);
 		if (error)
 			goto readdir_error;
 		error = -ENOENT;
+		meta = (struct clothesfs_meta_block *)&buf;
+		clothesfs_msg(i->i_sb, KERN_ERR, "PP %d", sizeof(struct clothesfs_meta_block));
 
-		id = le16_to_cpu(meta.id);
+		id = le16_to_cpu(meta->id);
 		clothesfs_msg(i->i_sb, KERN_ERR, "Got id %x", id);
 		if (id != CLOTHESFS_META_ID)
 			goto readdir_error;
 
-		clothesfs_msg(i->i_sb, KERN_ERR, "Got type %x", meta.type);
-		if (meta.type != CLOTHESFS_META_DIR && meta.type != CLOTHESFS_META_DIR_EXT)
+		clothesfs_msg(i->i_sb, KERN_ERR, "Got type %x", meta->type);
+		if (meta->type != CLOTHESFS_META_DIR && meta->type != CLOTHESFS_META_DIR_EXT)
 			break;
 
-		clothesfs_msg(i->i_sb, KERN_ERR, "Got attr %x", meta.attrib);
+		clothesfs_msg(i->i_sb, KERN_ERR, "Got attr %x", meta->attrib);
+		clothesfs_msg(i->i_sb, KERN_ERR, "Got len %x", meta->namelen);
 
-		// No continuation
-		if (meta.ptr == 0)
+		clothesfs_emit_dir_block(ctx, i->i_sb, meta);
+
+		// No continuation block
+		if (meta->ptr == 0)
 			break;
-		++offset;
+		offset = meta->ptr;
 	}
 
 	return 0;
@@ -191,10 +263,13 @@ static struct dentry *clothesfs_lookup(struct inode *dir,
 {
 	int error;
 	unsigned short id;
+	struct clothesfs_inode_info *ci;
 	char buf[dir->i_sb->s_blocksize];
 
-	clothesfs_msg(dir->i_sb, KERN_ERR, "LOOKUP\n");
-	error = clothesfs_block_read(dir->i_sb, dir->i_ino, &buf, dir->i_sb->s_blocksize);
+	ci = CLOTHESFS_I(dir);
+
+	clothesfs_msg(dir->i_sb, KERN_ERR, "LOOKUP: %d %d", dir->i_ino, ci->pos);
+	error = clothesfs_block_read(dir->i_sb, ci->pos, &buf, dir->i_sb->s_blocksize);
 	if (error)
 		goto lookup_error;
 
@@ -208,6 +283,7 @@ static struct dentry *clothesfs_lookup(struct inode *dir,
 	//return d_splice_alias(inode, dentry);
 
 lookup_error:
+	clothesfs_msg(dir->i_sb, KERN_ERR, "LUP err %d", error);
 	return ERR_PTR(error);
 }
 
