@@ -4,8 +4,15 @@
 #include <linux/fs.h>
 #include <asm/byteorder.h>
 
-#define CLOTHESFS_SUPER_MAGIC 0x41004200
-#define CLOTHESFS_MAX_FN_LEN 100
+#define CLOTHESFS_SUPER_MAGIC     0x41004200
+#define CLOTHESFS_MAX_FN_LEN      100
+#define CLOTHESFS_BASE_BLOCK_SIZE 512
+
+#define CLOTHESFS_META_ID         0x0042
+#define CLOTHESFS_META_FILE       0x02
+#define CLOTHESFS_META_DIR        0x04
+#define CLOTHESFS_META_FILE_EXT   0x08
+#define CLOTHESFS_META_DIR_EXT    0x10
 
 struct clothesfs_super_block {
 	__u64 jump1;
@@ -24,6 +31,20 @@ struct clothesfs_super_block {
 	__u32 journal1;
 	__u32 journal2;
 	__u32 freechain;
+};
+
+struct clothesfs_meta_block {
+	__u16 id;
+	__u8  type;
+	__u8  attrib;
+	union {
+		struct {
+			__u64 size;
+			__u32 namelen;
+		};
+		__u8  data[512 - 2 - 1 - 1 - 4];
+	};
+	__u32 ptr;
 };
 
 struct clothesfs_sb_info {
@@ -45,6 +66,7 @@ struct clothesfs_sb_info {
 
 struct clothesfs_inode_info {
 	struct inode vfs_inode;
+	unsigned int pos;
 	// TODO
 };
 
