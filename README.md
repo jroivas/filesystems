@@ -4,7 +4,7 @@ Filesystem implementations.
 
 Includes my own filesystem ClothesFS, used by [C++ kernel](https://github.com/jroivas/cxx-kernel/tree/master/src/fs).
 
-Documentation [here](https://github.com/jroivas/cxx-kernel/blob/master/doc/clothes.md)
+Documentation [here](doc/clothes.md)
 
 
 ## Building
@@ -23,3 +23,8 @@ To run example test app, just write in `build` folder:
     ./clothes
 
 It should create `test.img` and list it's contents.
+
+
+## Kernel module
+
+There's read-only [Linux kernel module](module/) implementation.
