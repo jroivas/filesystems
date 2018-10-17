@@ -127,8 +127,6 @@ static int clothesfs_block_read(struct super_block *sb, unsigned int pos,
 
 	block_cnt = buflen / CLOTHESFS_BASE_BLOCK_SIZE;
 	offset = 0;
-	clothesfs_msg(sb, KERN_ERR, "Read from %x, %d bytes", pos, buflen);
-
 	while (block_cnt > 0) {
 		bh = sb_bread(sb, pos);
 		if (bh == NULL)
@@ -153,31 +151,25 @@ static int clothesfs_emit_dir_block(struct dir_context *ctx, struct super_block 
 	unsigned int ipos = 0;
 	unsigned int type;
 	int i;
-	char *fname;
 	unsigned int namelen;
 	int index;
 	struct inode *inode;
 	namelen = meta->namelen;
 	index = le32_to_cpu(namelen) / 4;
-	clothesfs_msg(sb, KERN_ERR, "FF: %d, %d, %d", index, namelen, meta->namelen);
 
 	if (namelen % 4 != 0)
 		++index;
 
-	clothesfs_msg(sb, KERN_ERR, "Iter from: %d, %d", index, namelen);
-	clothesfs_msg(sb, KERN_ERR, "Folder name: %s", meta->name);
 	if (ctx->pos > 2)
 		index += ctx->pos - 2;
 	for (i = index; i < 123; ++i) {
 		ipos = meta->payload[i];
-		clothesfs_msg(sb, KERN_ERR, "Pos: %d, %d", i, ipos);
 		if (ipos == 0)
 			break;
 
-		//ctx->pos = ipos;
 		error = clothesfs_block_read(sb, ipos, &buf, sb->s_blocksize);
 		if (error)
-			goto out;
+			goto dir_emit_error;
 
 		entry_meta = (struct clothesfs_meta_block *)buf;
 		if (entry_meta->type == CLOTHESFS_META_DIR
@@ -189,33 +181,29 @@ static int clothesfs_emit_dir_block(struct dir_context *ctx, struct super_block 
 		} else {
 			clothesfs_msg(sb, KERN_ERR, "Invalid entry type %x", entry_meta->type);
 			error = -EINVAL;
-			goto out;
+			goto dir_emit_error;
 		}
 		if (entry_meta->namelen <= 0) {
 			clothesfs_msg(sb, KERN_ERR, "Invalid name len: %d", entry_meta->namelen);
 			error = -EINVAL;
-			goto out;
+			goto dir_emit_error;
 		}
-
-		fname = entry_meta->name;
 
 		inode = clothesfs_get_inode(sb, ipos, entry_meta->type, entry_meta->size);
 		if (inode == NULL) {
 			error = -EINVAL;
-			goto out;
+			goto dir_emit_error;
 		}
 
-		clothesfs_msg(sb, KERN_ERR, "DIRFound: %s, %d, inode: %d, type %x, pos %d", fname, ipos, inode->i_ino, entry_meta->type, ctx->pos);
 		if (!dir_emit(ctx, entry_meta->name, entry_meta->namelen, inode->i_ino, type)) {
 			clothesfs_msg(sb, KERN_ERR, "Invalid entry at: %d", i);
 			error = -EINVAL;
-			goto out;
+			goto dir_emit_error;
 		}
 		ctx->pos++;
 	}
 
-out:
-	clothesfs_msg(sb, KERN_ERR, "Return err: %d", error);
+dir_emit_error:
 	return error;
 }
 
@@ -235,10 +223,7 @@ static int clothesfs_readdir(struct file *file, struct dir_context *ctx)
 	sbi = CLOTHESFS_SB(i->i_sb);
 	mutex_lock(&sbi->s_lock);
 
-	clothesfs_msg(i->i_sb, KERN_ERR, "--- Read from %x %d", ci->pos, i->i_ino);
 	offset = ci->pos;
-
-	clothesfs_msg(i->i_sb, KERN_ERR, "D1 %d %x %d %d", offset, CLOTHESFS_SB(i->i_sb), CLOTHESFS_SB(i->i_sb)->size, i->i_sb->s_blocksize);
 	if (ctx->pos == 0) {
 		if (!dir_emit_dot(file, ctx))
 			goto readdir_error;
@@ -250,9 +235,6 @@ static int clothesfs_readdir(struct file *file, struct dir_context *ctx)
 		ctx->pos = 2;
 	}
 	while (offset < CLOTHESFS_SB(i->i_sb)->size / i->i_sb->s_blocksize) {
-		clothesfs_msg(i->i_sb, KERN_ERR, "Offs %d", offset);
-		//ctx->pos = offset;
-
 		error = clothesfs_block_read(i->i_sb, offset, &buf, i->i_sb->s_blocksize);
 		if (error)
 			goto readdir_error;
@@ -260,23 +242,16 @@ static int clothesfs_readdir(struct file *file, struct dir_context *ctx)
 		meta = (struct clothesfs_meta_block *)&buf;
 
 		id = le16_to_cpu(meta->id);
-		clothesfs_msg(i->i_sb, KERN_ERR, "Got id %x", id);
 		if (id != CLOTHESFS_META_ID)
 			goto readdir_error;
 
-		clothesfs_msg(i->i_sb, KERN_ERR, "Got type %x", meta->type);
 		if (meta->type != CLOTHESFS_META_DIR && meta->type != CLOTHESFS_META_DIR_EXT)
 			break;
 
-		clothesfs_msg(i->i_sb, KERN_ERR, "Got attr %x", meta->attrib);
-		clothesfs_msg(i->i_sb, KERN_ERR, "Got len %x", meta->namelen);
-
-		clothesfs_msg(i->i_sb, KERN_ERR, "D2 %x %x", i, i->i_sb);
 		error = clothesfs_emit_dir_block(ctx, i->i_sb, meta);
 		if (error)
 			goto readdir_error;
 
-		clothesfs_msg(i->i_sb, KERN_ERR, "Emit ok");
 		// No continuation block
 		if (meta->ptr == 0)
 			break;
@@ -284,6 +259,7 @@ static int clothesfs_readdir(struct file *file, struct dir_context *ctx)
 		goto readdir_out;
 		offset = meta->ptr;
 	}
+	goto readdir_out;
 
 readdir_error:
 	clothesfs_msg(i->i_sb, KERN_ERR, "Got error %d", error);
@@ -332,8 +308,6 @@ static int clothesfs_find_entry_from_dir(struct super_block *sb, struct clothesf
 			goto error_out;
 		}
 
-		clothesfs_msg(sb, KERN_ERR, "Name: %s != %s", entry_meta->name, child->name);
-		clothesfs_msg(sb, KERN_ERR, "Lens: %d != %d", entry_meta->namelen, child->len);
 		if (entry_meta->namelen != child->len)
 			continue;
 		if (strncmp(entry_meta->name, child->name, entry_meta->namelen) != 0)
@@ -368,8 +342,6 @@ struct inode *clothesfs_find_entry(struct inode *inode, const struct qstr *child
 	offset = ci->pos;
 
 	while (offset < CLOTHESFS_SB(sb)->size / sb->s_blocksize) {
-		clothesfs_msg(sb, KERN_ERR, "Offs %d", offset);
-
 		error = clothesfs_block_read(sb, offset, &buf, sb->s_blocksize);
 		if (error)
 			goto find_entry_error;
@@ -395,6 +367,7 @@ struct inode *clothesfs_find_entry(struct inode *inode, const struct qstr *child
 			break;
 		offset = meta->ptr;
 	}
+	goto find_entry_out;
 
 find_entry_error:
 	clothesfs_msg(sb, KERN_ERR, "Got error %d", error);
@@ -413,20 +386,15 @@ static struct dentry *clothesfs_lookup(struct inode *dir,
 
 	ci = CLOTHESFS_I(dir);
 
-	clothesfs_msg(dir->i_sb, KERN_ERR, "LOOKUP: %d %d %s", dir->i_ino, ci->pos, dentry->d_name.name);
-	//clothesfs_msg(dir->i_sb, KERN_ERR, "LName: %s", dentry->d_name.name);
-
 	inode = clothesfs_find_entry(dir, &dentry->d_name);
 	if (inode == NULL)
 		goto lookup_error;
-
-	clothesfs_msg(dir->i_sb, KERN_ERR, "LFOFound: %d %s", inode->i_ino, dentry->d_name.name);
 
 	alias = d_find_alias(inode);
 	return d_splice_alias(inode, dentry);
 
 lookup_error:
-	clothesfs_msg(dir->i_sb, KERN_ERR, "LUP err %d", error);
+	clothesfs_msg(dir->i_sb, KERN_ERR, "Lookup error %d", error);
 	return ERR_PTR(error);
 }
 
@@ -453,7 +421,6 @@ static struct inode *clothesfs_get_inode(struct super_block *sb, unsigned int po
 {
 	struct clothesfs_inode_info *ci;
 	struct inode *inode = iget_locked(sb, pos);
-	clothesfs_msg(sb, KERN_ERR, "+++ INODE: %d %d", pos, inode->i_ino);
 
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
@@ -461,7 +428,6 @@ static struct inode *clothesfs_get_inode(struct super_block *sb, unsigned int po
 	if (!(inode->i_state & I_NEW))
 		return inode;
 
-	//inode->i_ino = get_next_ino();
 	inode->i_sb = sb;
 
 	set_nlink(inode, 1);
