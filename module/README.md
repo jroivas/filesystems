@@ -7,10 +7,11 @@ Implements ClothesFS read-only filesystem for Linux kernel.
 - Mounting ClothesFS volume
 - List directories
 - List files
+- Read small files (under 492 bytes)
 
 ## TODO
 
-- Read files
+- Read all files
 
 
 ## Building
