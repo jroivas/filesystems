@@ -154,6 +154,7 @@ static int clothesfs_emit_dir_block(struct dir_context *ctx, struct super_block 
 	unsigned int namelen;
 	int index;
 	struct inode *inode;
+	size_t size;
 	namelen = meta->namelen;
 	index = le32_to_cpu(namelen) / 4;
 
@@ -175,9 +176,11 @@ static int clothesfs_emit_dir_block(struct dir_context *ctx, struct super_block 
 		if (entry_meta->type == CLOTHESFS_META_DIR
 			|| entry_meta->type == CLOTHESFS_META_DIR_EXT) {
 			type = DT_DIR;
+			size = sb->s_blocksize;
 		} else if (entry_meta->type == CLOTHESFS_META_FILE
 			|| entry_meta->type == CLOTHESFS_META_FILE_EXT) {
 			type = DT_REG;
+			size = entry_meta->size;
 		} else {
 			clothesfs_msg(sb, KERN_ERR, "Invalid entry type %x", entry_meta->type);
 			error = -EINVAL;
@@ -189,7 +192,7 @@ static int clothesfs_emit_dir_block(struct dir_context *ctx, struct super_block 
 			goto dir_emit_error;
 		}
 
-		inode = clothesfs_get_inode(sb, ipos, entry_meta->type, entry_meta->size);
+		inode = clothesfs_get_inode(sb, ipos, entry_meta->type, size);
 		if (inode == NULL) {
 			error = -EINVAL;
 			goto dir_emit_error;
@@ -213,7 +216,7 @@ static int clothesfs_readdir(struct file *file, struct dir_context *ctx)
 	unsigned long offset;
 	struct clothesfs_inode_info *ci;
 	struct clothesfs_sb_info *sbi;
-	int error;
+	int error = 0;
 	unsigned short id;
 	char buf[i->i_sb->s_blocksize];
 	struct clothesfs_meta_block *meta;
@@ -280,6 +283,7 @@ static int clothesfs_find_entry_from_dir(struct super_block *sb, struct clothesf
 	int i;
 	unsigned int namelen;
 	int index;
+	size_t size;
 	namelen = meta->namelen;
 	index = le32_to_cpu(namelen) / 4;
 
@@ -294,12 +298,14 @@ static int clothesfs_find_entry_from_dir(struct super_block *sb, struct clothesf
 		error = clothesfs_block_read(sb, ipos, &buf, sb->s_blocksize);
 		entry_meta = (struct clothesfs_meta_block *)buf;
 		if (entry_meta->type == CLOTHESFS_META_DIR
-			|| entry_meta->type == CLOTHESFS_META_DIR_EXT)
+			|| entry_meta->type == CLOTHESFS_META_DIR_EXT) {
 			type = DT_DIR;
-		else if (entry_meta->type == CLOTHESFS_META_FILE
-			|| entry_meta->type == CLOTHESFS_META_FILE_EXT)
+			size = sb->s_blocksize;
+		} else if (entry_meta->type == CLOTHESFS_META_FILE
+			|| entry_meta->type == CLOTHESFS_META_FILE_EXT) {
 			type = DT_REG;
-		else {
+			size = entry_meta->size;
+		} else {
 			clothesfs_msg(sb, KERN_ERR, "Invalid entry type %x", entry_meta->type);
 			goto error_out;
 		}
@@ -315,7 +321,7 @@ static int clothesfs_find_entry_from_dir(struct super_block *sb, struct clothesf
 
 
 		error = 0;
-		*inode = clothesfs_get_inode(sb, ipos, entry_meta->type, entry_meta->size);
+		*inode = clothesfs_get_inode(sb, ipos, entry_meta->type, size);
 		goto out;
 	}
 
@@ -453,7 +459,7 @@ static struct inode *clothesfs_get_inode(struct super_block *sb, unsigned int po
 
 static struct inode *clothesfs_get_root(struct super_block *sb, unsigned int pos)
 {
-	return clothesfs_get_inode(sb, pos, CLOTHESFS_META_DIR, 0);
+	return clothesfs_get_inode(sb, pos, CLOTHESFS_META_DIR, sb->s_blocksize);
 }
 
 int clothesfs_fill_super(struct super_block *sb, void *data, int silent)
