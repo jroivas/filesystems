@@ -66,7 +66,6 @@ struct clothesfs_sb_info {
 struct clothesfs_inode_info {
 	struct inode vfs_inode;
 	unsigned int pos;
-	// TODO
 };
 
 

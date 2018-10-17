@@ -64,8 +64,6 @@ static int clothesfs_statfs(struct dentry *dentry, struct kstatfs *buf)
         buf->f_blocks = sbi->size / sbi->blocksize;
         buf->f_fsid.val[0] = (u32)id;
         buf->f_fsid.val[1] = (u32)(id >> 32);
-        //buf->f_fsid.val[0] = (u32)sbi->vol_id;
-        //buf->f_fsid.val[1] = (u32)(sbi->vol_id >> 32);
 
 	return 0;
 }
@@ -406,7 +404,65 @@ lookup_error:
 
 static int clothesfs_readpage(struct file *file, struct page *page)
 {
-	return -EINVAL;
+	struct inode *inode = page->mapping->host;
+	struct clothesfs_inode_info *ci;
+	struct super_block *sb = inode->i_sb;
+	loff_t size;
+	loff_t offset;
+	unsigned long fillsize;
+	unsigned long avail;
+	int error = 0;
+	char buf[sb->s_blocksize];
+	struct clothesfs_meta_block *meta;
+	void *result_buf;
+
+	result_buf = kmap(page);
+
+	ci = CLOTHESFS_I(inode);
+
+	offset = page_offset(page);
+        size = i_size_read(inode);
+
+	error = clothesfs_block_read(sb, ci->pos, &buf, sb->s_blocksize);
+	if (error)
+		goto readpage_error;
+
+	meta = (struct clothesfs_meta_block *)&buf;
+	if (meta->type != CLOTHESFS_META_FILE &&
+		meta->type != CLOTHESFS_META_FILE_EXT)
+		goto readpage_error;
+
+	fillsize = 0;
+	if (offset < size) {
+		size -= offset;
+		fillsize = size > PAGE_SIZE ? PAGE_SIZE : size;
+	}
+	avail = sb->s_blocksize - 4 - 8 - 4 - 4 - meta->namelen;
+	if (fillsize > avail) {
+		fillsize = avail;
+	}
+
+	memcpy(result_buf, (char *)meta->name, fillsize);
+	if (fillsize < PAGE_SIZE)
+		memset(result_buf + fillsize, 0, PAGE_SIZE - fillsize);
+
+	// FIXME Supports only small files (fits on one page)
+	// FIXME meta->ptr not checked for continuation!
+
+	SetPageUptodate(page);
+
+	goto readpage_out;
+
+readpage_error:
+	SetPageError(page);
+	error = -EIO;
+	clothesfs_msg(sb, KERN_ERR, "Readpage error %d", error);
+
+readpage_out:
+        flush_dcache_page(page);
+        kunmap(page);
+        unlock_page(page);
+	return error;
 }
 
 static const struct file_operations clothesfs_dir_operations = {
