@@ -166,13 +166,15 @@ static int clothesfs_emit_dir_block(struct dir_context *ctx, struct super_block 
 
 	clothesfs_msg(sb, KERN_ERR, "Iter from: %d, %d", index, namelen);
 	clothesfs_msg(sb, KERN_ERR, "Folder name: %s", meta->name);
+	if (ctx->pos > 2)
+		index += ctx->pos - 2;
 	for (i = index; i < 123; ++i) {
 		ipos = meta->payload[i];
 		clothesfs_msg(sb, KERN_ERR, "Pos: %d, %d", i, ipos);
 		if (ipos == 0)
 			break;
 
-		ctx->pos = ipos;
+		//ctx->pos = ipos;
 		error = clothesfs_block_read(sb, ipos, &buf, sb->s_blocksize);
 		if (error)
 			goto out;
@@ -195,13 +197,7 @@ static int clothesfs_emit_dir_block(struct dir_context *ctx, struct super_block 
 			goto out;
 		}
 
-		fname = kzalloc(entry_meta->namelen + 1, GFP_KERNEL);
-		if (fname == NULL) {
-			error = -ENOMEM;
-			goto out;
-		}
-		memcpy(fname, entry_meta->name, entry_meta->namelen);
-		fname[entry_meta->namelen] = 0;
+		fname = entry_meta->name;
 
 		inode = clothesfs_get_inode(sb, ipos, entry_meta->type, entry_meta->size);
 		if (inode == NULL) {
@@ -209,12 +205,13 @@ static int clothesfs_emit_dir_block(struct dir_context *ctx, struct super_block 
 			goto out;
 		}
 
-		clothesfs_msg(sb, KERN_ERR, "DIRFound: %s, %d, inode: %d", fname, ipos, inode->i_ino);
-		if (!dir_emit(ctx, fname, entry_meta->namelen, inode->i_ino, type)) {
+		clothesfs_msg(sb, KERN_ERR, "DIRFound: %s, %d, inode: %d, type %x, pos %d", fname, ipos, inode->i_ino, entry_meta->type, ctx->pos);
+		if (!dir_emit(ctx, entry_meta->name, entry_meta->namelen, inode->i_ino, type)) {
 			clothesfs_msg(sb, KERN_ERR, "Invalid entry at: %d", i);
 			error = -EINVAL;
 			goto out;
 		}
+		ctx->pos++;
 	}
 
 out:
@@ -227,6 +224,7 @@ static int clothesfs_readdir(struct file *file, struct dir_context *ctx)
 	struct inode *i = file_inode(file);
 	unsigned long offset;
 	struct clothesfs_inode_info *ci;
+	struct clothesfs_sb_info *sbi;
 	int error;
 	unsigned short id;
 	char buf[i->i_sb->s_blocksize];
@@ -234,12 +232,26 @@ static int clothesfs_readdir(struct file *file, struct dir_context *ctx)
 
 	ci = CLOTHESFS_I(i);
 
+	sbi = CLOTHESFS_SB(i->i_sb);
+	mutex_lock(&sbi->s_lock);
+
 	clothesfs_msg(i->i_sb, KERN_ERR, "--- Read from %x %d", ci->pos, i->i_ino);
 	offset = ci->pos;
 
+	clothesfs_msg(i->i_sb, KERN_ERR, "D1 %d %x %d %d", offset, CLOTHESFS_SB(i->i_sb), CLOTHESFS_SB(i->i_sb)->size, i->i_sb->s_blocksize);
+	if (ctx->pos == 0) {
+		if (!dir_emit_dot(file, ctx))
+			goto readdir_error;
+		ctx->pos = 1;
+	}
+	if (ctx->pos == 1) {
+		if (!dir_emit_dotdot(file, ctx))
+			goto readdir_error;
+		ctx->pos = 2;
+	}
 	while (offset < CLOTHESFS_SB(i->i_sb)->size / i->i_sb->s_blocksize) {
 		clothesfs_msg(i->i_sb, KERN_ERR, "Offs %d", offset);
-		ctx->pos = offset;
+		//ctx->pos = offset;
 
 		error = clothesfs_block_read(i->i_sb, offset, &buf, i->i_sb->s_blocksize);
 		if (error)
@@ -259,20 +271,25 @@ static int clothesfs_readdir(struct file *file, struct dir_context *ctx)
 		clothesfs_msg(i->i_sb, KERN_ERR, "Got attr %x", meta->attrib);
 		clothesfs_msg(i->i_sb, KERN_ERR, "Got len %x", meta->namelen);
 
+		clothesfs_msg(i->i_sb, KERN_ERR, "D2 %x %x", i, i->i_sb);
 		error = clothesfs_emit_dir_block(ctx, i->i_sb, meta);
 		if (error)
 			goto readdir_error;
 
+		clothesfs_msg(i->i_sb, KERN_ERR, "Emit ok");
 		// No continuation block
 		if (meta->ptr == 0)
 			break;
+
+		goto readdir_out;
 		offset = meta->ptr;
 	}
 
-	return 0;
-
 readdir_error:
 	clothesfs_msg(i->i_sb, KERN_ERR, "Got error %d", error);
+
+readdir_out:
+	mutex_unlock(&sbi->s_lock);
 	return error;
 }
 
@@ -527,7 +544,7 @@ int clothesfs_fill_super(struct super_block *sb, void *data, int silent)
 		goto out_fail;
 	}
 
-	clothesfs_msg(sb, KERN_ERR, "All ok");
+	clothesfs_msg(sb, KERN_ERR, "Superblock ok");
 	goto out;
 
 cant_find_clothes:
