@@ -9,10 +9,16 @@
 #define CLOTHESFS_BASE_BLOCK_SIZE 512
 
 #define CLOTHESFS_META_ID         0x0042
+#define CLOTHESFS_PAYLOAD_ID      0x4242
 #define CLOTHESFS_META_FILE       0x02
 #define CLOTHESFS_META_DIR        0x04
 #define CLOTHESFS_META_FILE_EXT   0x08
 #define CLOTHESFS_META_DIR_EXT    0x10
+
+#define CLOTHESFS_PAYLOAD_FREE    0x00
+#define CLOTHESFS_PAYLOAD_USED    0x01
+#define CLOTHESFS_PAYLOAD_FREED   0x02
+
 
 struct clothesfs_super_block {
 	__u64 jump1;
@@ -44,6 +50,16 @@ struct clothesfs_meta_block {
 		__u8  name[492];
 	};
 	__u32 ptr;
+} __attribute__((packed));
+
+struct clothesfs_payload_block {
+	__u16 id;
+	__u8  type;
+	__u8  algo;
+	union {
+		__u32 check;
+		__u8  data[508];
+	};
 } __attribute__((packed));
 
 struct clothesfs_sb_info {

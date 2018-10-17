@@ -411,9 +411,15 @@ static int clothesfs_readpage(struct file *file, struct page *page)
 	loff_t offset;
 	unsigned long fillsize;
 	unsigned long avail;
+	unsigned long meta_index;
+	unsigned long index;
+	unsigned long checksum_extra = 0;
+	unsigned short id;
 	int error = 0;
+	char buf_meta[sb->s_blocksize];
 	char buf[sb->s_blocksize];
 	struct clothesfs_meta_block *meta;
+	struct clothesfs_payload_block *payload;
 	void *result_buf;
 
 	result_buf = kmap(page);
@@ -423,13 +429,27 @@ static int clothesfs_readpage(struct file *file, struct page *page)
 	offset = page_offset(page);
         size = i_size_read(inode);
 
-	error = clothesfs_block_read(sb, ci->pos, &buf, sb->s_blocksize);
+	error = clothesfs_block_read(sb, ci->pos, &buf_meta, sb->s_blocksize);
 	if (error)
 		goto readpage_error;
 
-	meta = (struct clothesfs_meta_block *)&buf;
-	if (meta->type != CLOTHESFS_META_FILE &&
-		meta->type != CLOTHESFS_META_FILE_EXT)
+	meta = (struct clothesfs_meta_block *)&buf_meta;
+	meta_index = meta->namelen / 4 + ((meta->namelen % 4 != 0) ? 1 : 0);
+	index = le32_to_cpu(meta->payload[meta_index]);
+
+
+	// FIXME Only one block read from file meta
+	// Increase meta_index, until index == 0
+	error = clothesfs_block_read(sb, index, &buf, sb->s_blocksize);
+	if (error)
+		goto readpage_error;
+
+	payload = (struct clothesfs_payload_block *)&buf;
+	id = le16_to_cpu(payload->id);
+	if (id != CLOTHESFS_PAYLOAD_ID)
+		goto readpage_error;
+
+	if (payload->type != CLOTHESFS_PAYLOAD_USED)
 		goto readpage_error;
 
 	fillsize = 0;
@@ -437,17 +457,20 @@ static int clothesfs_readpage(struct file *file, struct page *page)
 		size -= offset;
 		fillsize = size > PAGE_SIZE ? PAGE_SIZE : size;
 	}
-	avail = sb->s_blocksize - 4 - 8 - 4 - 4 - meta->namelen;
+	if (payload->algo != 0)
+		checksum_extra += 4;
+
+	avail = sb->s_blocksize - 4 - checksum_extra;
 	if (fillsize > avail) {
 		fillsize = avail;
 	}
 
-	memcpy(result_buf, (char *)meta->name, fillsize);
+	memcpy(result_buf, ((char *)payload->data) + checksum_extra, fillsize);
 	if (fillsize < PAGE_SIZE)
 		memset(result_buf + fillsize, 0, PAGE_SIZE - fillsize);
 
 	// FIXME Supports only small files (fits on one page)
-	// FIXME meta->ptr not checked for continuation!
+	// FIXME meta->ptr not checked for continuation of metadatas!
 
 	SetPageUptodate(page);
 
