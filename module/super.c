@@ -409,10 +409,12 @@ static int clothesfs_readpage(struct file *file, struct page *page)
 	struct super_block *sb = inode->i_sb;
 	loff_t size;
 	loff_t offset;
+	loff_t pos;
 	unsigned long fillsize;
 	unsigned long avail;
 	unsigned long meta_index;
 	unsigned long index;
+	long page_size_left;
 	unsigned long checksum_extra = 0;
 	unsigned short id;
 	int error = 0;
@@ -437,40 +439,53 @@ static int clothesfs_readpage(struct file *file, struct page *page)
 	meta_index = meta->namelen / 4 + ((meta->namelen % 4 != 0) ? 1 : 0);
 	index = le32_to_cpu(meta->payload[meta_index]);
 
+	page_size_left = PAGE_SIZE;
+	memset(result_buf, 0, PAGE_SIZE);
 
-	// FIXME Only one block read from file meta
-	// Increase meta_index, until index == 0
-	error = clothesfs_block_read(sb, index, &buf, sb->s_blocksize);
-	if (error)
-		goto readpage_error;
+	pos = 0;
 
-	payload = (struct clothesfs_payload_block *)&buf;
-	id = le16_to_cpu(payload->id);
-	if (id != CLOTHESFS_PAYLOAD_ID)
-		goto readpage_error;
+	while (index != 0 && page_size_left > 0) {
+		error = clothesfs_block_read(sb, index, &buf, sb->s_blocksize);
+		if (error)
+			goto readpage_error;
 
-	if (payload->type != CLOTHESFS_PAYLOAD_USED)
-		goto readpage_error;
+		payload = (struct clothesfs_payload_block *)&buf;
+		id = le16_to_cpu(payload->id);
+		if (id != CLOTHESFS_PAYLOAD_ID)
+			goto readpage_error;
 
-	fillsize = 0;
-	if (offset < size) {
-		size -= offset;
-		fillsize = size > PAGE_SIZE ? PAGE_SIZE : size;
+		if (payload->type != CLOTHESFS_PAYLOAD_USED)
+			goto readpage_error;
+
+		fillsize = (size - pos) > page_size_left ? page_size_left : size - pos;
+		checksum_extra = 0;
+		if (payload->algo != 0)
+			checksum_extra += 4;
+
+		avail = sb->s_blocksize - 4 - checksum_extra;
+		if (fillsize > avail) {
+			fillsize = avail;
+		}
+
+		if ((pos + fillsize) >= offset) {
+			if (pos < offset) {
+				fillsize -= (offset - pos);
+				checksum_extra += (offset - pos);
+				pos = offset;
+			}
+
+			memcpy(result_buf + pos - offset, ((char *)payload->data) + checksum_extra, fillsize);
+
+			page_size_left -= fillsize;
+		}
+
+		pos += fillsize;
+		meta_index++;
+		index = le32_to_cpu(meta->payload[meta_index]);
 	}
-	if (payload->algo != 0)
-		checksum_extra += 4;
 
-	avail = sb->s_blocksize - 4 - checksum_extra;
-	if (fillsize > avail) {
-		fillsize = avail;
-	}
-
-	memcpy(result_buf, ((char *)payload->data) + checksum_extra, fillsize);
-	if (fillsize < PAGE_SIZE)
-		memset(result_buf + fillsize, 0, PAGE_SIZE - fillsize);
-
-	// FIXME Supports only small files (fits on one page)
-	// FIXME meta->ptr not checked for continuation of metadatas!
+	// FIXME Supports only small files (fits on one table, max 123 * 508 (~61kiB)
+	// meta->ptr not checked for continuation of metadatas!
 
 	SetPageUptodate(page);
 
