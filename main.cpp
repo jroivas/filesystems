@@ -89,17 +89,17 @@ int main(int argc, char **argv)
     res = cloth.addFile(1, "dummy", "4dummy2", 7);
 
     FILE *tmpf = fopen("test.md", "r");
-    fseek(tmpf, 0L, SEEK_END);
-    long size = ftell(tmpf);
-    fseek(tmpf, 0L, SEEK_SET);
-
-    char *fdata = (char*)malloc(size);
     if (tmpf != NULL) {
+        fseek(tmpf, 0L, SEEK_END);
+        long size = ftell(tmpf);
+        fseek(tmpf, 0L, SEEK_SET);
+
+        char *fdata = (char*)malloc(size);
         size_t cnt = fread(fdata, 1, size, tmpf);
         fclose(tmpf);
         res = cloth.addFile(1, "test.md", fdata, cnt);
+        free(fdata);
     }
-    free(fdata);
 
     cloth.addDir(1, "folder");
     res = cloth.addFile(4, "fileinfolder", "data42.", 7);
