@@ -76,7 +76,7 @@ protected:
 
 int main(int argc, char **argv)
 {
-    FilePhys phys("test.img", 1024 * 40);
+    FilePhys phys("test.img", 1024 * 1024);
 
     ClothesFS cloth;
     cloth.setPhysical(&phys);
@@ -89,12 +89,17 @@ int main(int argc, char **argv)
     res = cloth.addFile(1, "dummy", "4dummy2", 7);
 
     FILE *tmpf = fopen("test.md", "r");
-    char *fdata = new char[7000];
+    fseek(tmpf, 0L, SEEK_END);
+    long size = ftell(tmpf);
+    fseek(tmpf, 0L, SEEK_SET);
+
+    char *fdata = (char*)malloc(size);
     if (tmpf != NULL) {
-        size_t cnt = fread(fdata, 1, 7000, tmpf);
+        size_t cnt = fread(fdata, 1, size, tmpf);
         fclose(tmpf);
         res = cloth.addFile(1, "test.md", fdata, cnt);
     }
+    free(fdata);
 
     cloth.addDir(1, "folder");
     res = cloth.addFile(4, "fileinfolder", "data42.", 7);
