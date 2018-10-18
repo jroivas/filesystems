@@ -9,14 +9,18 @@
 
 static struct kmem_cache *clothesfs_inode_cachep;
 
-static struct inode *clothesfs_get_inode(struct super_block *sb, unsigned int pos, unsigned int entry_type, size_t entry_size);
+static struct inode *clothesfs_get_inode(struct super_block *sb,
+					 unsigned int pos,
+					 unsigned int entry_type,
+					 size_t entry_size);
 
 static inline struct clothesfs_inode_info *CLOTHESFS_I(struct inode *inode)
 {
         return container_of(inode, struct clothesfs_inode_info, vfs_inode);
 }
 
-static inline struct clothesfs_sb_info *CLOTHESFS_SB(struct super_block *sb)
+static inline struct clothesfs_sb_info *CLOTHESFS_SB(
+	struct super_block *sb)
 {
         return sb->s_fs_info;
 }
@@ -40,7 +44,8 @@ static void clothesfs_destroy_inode(struct inode *inode)
         call_rcu(&inode->i_rcu, clothesfs_i_callback);
 }
 
-static int clothesfs_remount(struct super_block *sb, int *flags, char *data)
+static int clothesfs_remount(struct super_block *sb,
+		int *flags, char *data)
 {
         sync_filesystem(sb);
         *flags |= SB_RDONLY;
@@ -99,7 +104,8 @@ static int clothesfs_read_super(struct super_block *sb,
 	}
 	clothesfs_msg(sb, KERN_ERR, "DBG volume id: %x", sbi->vol_id);
 	if (!sbi->root) {
-		clothesfs_msg(sb, KERN_ERR, "Invalid root position: %x != %x", sbi->root, csb->root);
+		clothesfs_msg(sb, KERN_ERR, "Invalid root position: %x != %x",
+			      sbi->root, csb->root);
 		goto out;
 	}
 	clothesfs_msg(sb, KERN_ERR, "DBG root position: %x", sbi->root);
@@ -140,7 +146,9 @@ static int clothesfs_block_read(struct super_block *sb, unsigned int pos,
 	return 0;
 }
 
-static int clothesfs_emit_dir_block(struct dir_context *ctx, struct super_block *sb, struct clothesfs_meta_block *meta)
+static int clothesfs_emit_dir_block(struct dir_context *ctx,
+				    struct super_block *sb,
+				    struct clothesfs_meta_block *meta)
 {
 	int error = 0;
 	char buf[sb->s_blocksize];
@@ -185,7 +193,8 @@ static int clothesfs_emit_dir_block(struct dir_context *ctx, struct super_block 
 			goto dir_emit_error;
 		}
 		if (entry_meta->namelen <= 0) {
-			clothesfs_msg(sb, KERN_ERR, "Invalid name len: %d", entry_meta->namelen);
+			clothesfs_msg(sb, KERN_ERR, "Invalid name len: %d",
+				      entry_meta->namelen);
 			error = -EINVAL;
 			goto dir_emit_error;
 		}
@@ -196,7 +205,8 @@ static int clothesfs_emit_dir_block(struct dir_context *ctx, struct super_block 
 			goto dir_emit_error;
 		}
 
-		if (!dir_emit(ctx, entry_meta->name, entry_meta->namelen, inode->i_ino, type)) {
+		if (!dir_emit(ctx, entry_meta->name, entry_meta->namelen,
+			      inode->i_ino, type)) {
 			clothesfs_msg(sb, KERN_ERR, "Invalid entry at: %d", i);
 			error = -EINVAL;
 			goto dir_emit_error;
@@ -236,7 +246,8 @@ static int clothesfs_readdir(struct file *file, struct dir_context *ctx)
 		ctx->pos = 2;
 	}
 	while (offset < CLOTHESFS_SB(i->i_sb)->size / i->i_sb->s_blocksize) {
-		error = clothesfs_block_read(i->i_sb, offset, &buf, i->i_sb->s_blocksize);
+		error = clothesfs_block_read(i->i_sb, offset, &buf,
+					     i->i_sb->s_blocksize);
 		if (error)
 			goto readdir_error;
 		error = -ENOENT;
@@ -246,7 +257,8 @@ static int clothesfs_readdir(struct file *file, struct dir_context *ctx)
 		if (id != CLOTHESFS_META_ID)
 			goto readdir_error;
 
-		if (meta->type != CLOTHESFS_META_DIR && meta->type != CLOTHESFS_META_DIR_EXT)
+		if (meta->type != CLOTHESFS_META_DIR &&
+		    meta->type != CLOTHESFS_META_DIR_EXT)
 			break;
 
 		error = clothesfs_emit_dir_block(ctx, i->i_sb, meta);
@@ -270,7 +282,10 @@ readdir_out:
 	return error;
 }
 
-static int clothesfs_find_entry_from_dir(struct super_block *sb, struct clothesfs_meta_block *meta, const struct qstr *child, struct inode **inode)
+static int clothesfs_find_entry_from_dir(struct super_block *sb,
+					 struct clothesfs_meta_block *meta,
+					 const struct qstr *child,
+					 struct inode **inode)
 {
 	int error = 0;
 	char buf[sb->s_blocksize];
@@ -308,7 +323,8 @@ static int clothesfs_find_entry_from_dir(struct super_block *sb, struct clothesf
 			goto error_out;
 		}
 		if (entry_meta->namelen <= 0) {
-			clothesfs_msg(sb, KERN_ERR, "Invalid name len: %d", entry_meta->namelen);
+			clothesfs_msg(sb, KERN_ERR, "Invalid name len: %d",
+				      entry_meta->namelen);
 			goto error_out;
 		}
 
@@ -330,7 +346,8 @@ out:
 	return error;
 }
 
-struct inode *clothesfs_find_entry(struct inode *inode, const struct qstr *child)
+struct inode *clothesfs_find_entry(struct inode *inode,
+				   const struct qstr *child)
 {
 	int error = 0;
 	struct super_block *sb = inode->i_sb;
@@ -356,7 +373,8 @@ struct inode *clothesfs_find_entry(struct inode *inode, const struct qstr *child
 		if (id != CLOTHESFS_META_ID)
 			goto find_entry_error;
 
-		if (meta->type != CLOTHESFS_META_DIR && meta->type != CLOTHESFS_META_DIR_EXT)
+		if (meta->type != CLOTHESFS_META_DIR &&
+		    meta->type != CLOTHESFS_META_DIR_EXT)
 			break;
 
 		error = clothesfs_find_entry_from_dir(sb, meta, child, &child_inode);
@@ -414,8 +432,9 @@ static int clothesfs_readpage(struct file *file, struct page *page)
 	unsigned long avail;
 	unsigned long meta_index;
 	unsigned long index;
-	long page_size_left;
+	unsigned long page_size_left;
 	unsigned long checksum_extra = 0;
+	unsigned long pagepos;
 	unsigned short id;
 	int error = 0;
 	char buf_meta[sb->s_blocksize];
@@ -430,63 +449,87 @@ static int clothesfs_readpage(struct file *file, struct page *page)
 
 	offset = page_offset(page);
         size = i_size_read(inode);
-
-	error = clothesfs_block_read(sb, ci->pos, &buf_meta, sb->s_blocksize);
-	if (error)
-		goto readpage_error;
-
-	meta = (struct clothesfs_meta_block *)&buf_meta;
-	meta_index = meta->namelen / 4 + ((meta->namelen % 4 != 0) ? 1 : 0);
-	index = le32_to_cpu(meta->payload[meta_index]);
-
 	page_size_left = PAGE_SIZE;
+
+	pagepos = ci->pos;
+	pos = 0;
 	memset(result_buf, 0, PAGE_SIZE);
 
-	pos = 0;
+	while (page_size_left > 0) {
+		if (page_size_left == 0)
+			break;
 
-	while (index != 0 && page_size_left > 0) {
-		error = clothesfs_block_read(sb, index, &buf, sb->s_blocksize);
+		error = clothesfs_block_read(sb, pagepos, &buf_meta, sb->s_blocksize);
 		if (error)
 			goto readpage_error;
 
-		payload = (struct clothesfs_payload_block *)&buf;
-		id = le16_to_cpu(payload->id);
-		if (id != CLOTHESFS_PAYLOAD_ID)
-			goto readpage_error;
+		meta = (struct clothesfs_meta_block *)&buf_meta;
+		meta_index = meta->namelen / 4 + ((meta->namelen % 4 != 0) ? 1 : 0);
+		index = le32_to_cpu(meta->payload[meta_index]);
 
-		if (payload->type != CLOTHESFS_PAYLOAD_USED)
-			goto readpage_error;
+		while (index != 0 && page_size_left > 0) {
+			clothesfs_msg(sb, KERN_ERR, "Read %d %d", index, meta_index);
+			error = clothesfs_block_read(sb, index, &buf, sb->s_blocksize);
+			if (error)
+				goto readpage_error;
 
-		fillsize = (size - pos) > page_size_left ? page_size_left : size - pos;
-		checksum_extra = 0;
-		if (payload->algo != 0)
-			checksum_extra += 4;
+			payload = (struct clothesfs_payload_block *)&buf;
+			id = le16_to_cpu(payload->id);
+			clothesfs_msg(sb, KERN_ERR, "ID %x", id);
+			if (id != CLOTHESFS_PAYLOAD_ID)
+				goto readpage_error;
 
-		avail = sb->s_blocksize - 4 - checksum_extra;
-		if (fillsize > avail) {
-			fillsize = avail;
-		}
+			clothesfs_msg(sb, KERN_ERR, "type %x", payload->type);
+			if (payload->type != CLOTHESFS_PAYLOAD_USED)
+				goto readpage_error;
 
-		if ((pos + fillsize) >= offset) {
-			if (pos < offset) {
-				fillsize -= (offset - pos);
-				checksum_extra += (offset - pos);
-				pos = offset;
+			fillsize = (size - pos) > page_size_left ? page_size_left : size - pos;
+			checksum_extra = 0;
+			if (payload->algo != 0)
+				checksum_extra += 4;
+
+			clothesfs_msg(sb, KERN_ERR, "BLK %d %d %d %d", pos,
+				      page_size_left, offset, fillsize);
+			avail = sb->s_blocksize - 4 - checksum_extra;
+			if (fillsize > avail) {
+				fillsize = avail;
 			}
 
-			memcpy(result_buf + pos - offset, ((char *)payload->data) + checksum_extra, fillsize);
+			clothesfs_msg(sb, KERN_ERR, "BLK %d %d %d %d", pos,
+				      page_size_left, offset, fillsize);
+			if ((pos + fillsize) >= offset) {
+				if (pos < offset) {
+					fillsize -= (offset - pos);
+					checksum_extra += (offset - pos);
+					pos = offset;
+				}
 
-			page_size_left -= fillsize;
+				clothesfs_msg(sb, KERN_ERR, "cpy %d %d %d %d %d",
+					      pos, page_size_left, offset,
+					      fillsize, size);
+				memcpy(result_buf + pos - offset,
+				       ((char *)payload->data) + checksum_extra, fillsize);
+
+				page_size_left -= fillsize;
+				clothesfs_msg(sb, KERN_ERR, "left %d", page_size_left);
+			}
+
+			pos += fillsize;
+			meta_index++;
+			index = le32_to_cpu(meta->payload[meta_index]);
 		}
 
-		pos += fillsize;
-		meta_index++;
-		index = le32_to_cpu(meta->payload[meta_index]);
+		// FIXME Supports only small files
+		// (fits on one table, max 123 * 508 (~61kiB)
+		// meta->ptr not checked for continuation of metadatas!
+		if (meta->ptr == 0)
+			break;
+
+		if (page_size_left > 0 && pos < size)
+			pagepos = meta->ptr;
 	}
 
-	// FIXME Supports only small files (fits on one table, max 123 * 508 (~61kiB)
-	// meta->ptr not checked for continuation of metadatas!
-
+	clothesfs_msg(sb, KERN_ERR, "offss %d %d", pos, size);
 	SetPageUptodate(page);
 
 	goto readpage_out;
@@ -517,7 +560,10 @@ static const struct address_space_operations clothesfs_aops = {
         .readpage       = clothesfs_readpage
 };
 
-static struct inode *clothesfs_get_inode(struct super_block *sb, unsigned int pos, unsigned int entry_type, size_t entry_size)
+static struct inode *clothesfs_get_inode(struct super_block *sb,
+					 unsigned int pos,
+					 unsigned int entry_type,
+					 size_t entry_size)
 {
 	struct clothesfs_inode_info *ci;
 	struct inode *inode = iget_locked(sb, pos);
@@ -532,8 +578,12 @@ static struct inode *clothesfs_get_inode(struct super_block *sb, unsigned int po
 
 	set_nlink(inode, 1);
 	inode->i_size = entry_size;
-        inode->i_mtime.tv_sec = inode->i_atime.tv_sec = inode->i_ctime.tv_sec = 0;
-        inode->i_mtime.tv_nsec = inode->i_atime.tv_nsec = inode->i_ctime.tv_nsec = 0;
+	inode->i_mtime.tv_sec = 0;
+	inode->i_atime.tv_sec = 0;
+	inode->i_ctime.tv_sec = 0;
+	inode->i_mtime.tv_nsec = 0;
+	inode->i_atime.tv_nsec = 0;
+	inode->i_ctime.tv_nsec = 0;
 	if (entry_type == CLOTHESFS_META_DIR) {
 		inode->i_op = &clothesfs_dir_inode_operations;
 		inode->i_fop = &clothesfs_dir_operations;
@@ -551,7 +601,8 @@ static struct inode *clothesfs_get_inode(struct super_block *sb, unsigned int po
 	return inode;
 }
 
-static struct inode *clothesfs_get_root(struct super_block *sb, unsigned int pos)
+static struct inode *clothesfs_get_root(struct super_block *sb,
+					unsigned int pos)
 {
 	return clothesfs_get_inode(sb, pos, CLOTHESFS_META_DIR, sb->s_blocksize);
 }
@@ -599,7 +650,8 @@ int clothesfs_fill_super(struct super_block *sb, void *data, int silent)
 
 	sb->s_maxbytes = MAX_LFS_FILESIZE;
 	if (sb->s_blocksize != sbi->blocksize) {
-		clothesfs_msg(sb, KERN_ERR, "Blocksize: %d != %d\n", sb->s_blocksize, sbi->blocksize);
+		clothesfs_msg(sb, KERN_ERR, "Blocksize: %d != %d\n",
+			      sb->s_blocksize, sbi->blocksize);
 		// TODO
 	}
 
@@ -614,7 +666,8 @@ int clothesfs_fill_super(struct super_block *sb, void *data, int silent)
 	goto out;
 
 cant_find_clothes:
-	clothesfs_msg(sb, KERN_ERR, "Can't find ClothesFS filesystem %x != %x != %x", sb->s_magic, csb->id, CLOTHESFS_SUPER_MAGIC);
+	clothesfs_msg(sb, KERN_ERR, "Can't find ClothesFS filesystem %s",
+		      sb->s_magic);
 
 out_fail:
 	if (error == 0) error = -EINVAL;

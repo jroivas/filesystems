@@ -1,8 +1,9 @@
 #include "clothesfs.h"
 
-void clothesfs_msg(struct super_block *sb, const char *level, const char *fmt, ...)
+void clothesfs_msg(struct super_block *sb,
+	const char *level, const char *fmt, ...)
 {
-        struct va_format vaf;
+	struct va_format vaf;
         va_list args;
 
         va_start(args, fmt);

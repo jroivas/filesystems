@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef _CLOTHESFS_H
 #define _CLOTHESFS_H
 
@@ -37,7 +38,7 @@ struct clothesfs_super_block {
 	__u32 journal1;
 	__u32 journal2;
 	__u32 freechain;
-} __attribute__((packed));
+} __packed;
 
 struct clothesfs_meta_block {
 	__u16 id;
@@ -50,7 +51,7 @@ struct clothesfs_meta_block {
 		__u8  name[492];
 	};
 	__u32 ptr;
-} __attribute__((packed));
+} __packed;
 
 struct clothesfs_payload_block {
 	__u16 id;
@@ -60,7 +61,7 @@ struct clothesfs_payload_block {
 		__u32 check;
 		__u8  data[508];
 	};
-} __attribute__((packed));
+} __packed;
 
 struct clothesfs_sb_info {
 	unsigned short blocksize;
@@ -75,7 +76,7 @@ struct clothesfs_sb_info {
 	unsigned int journal2;
 	unsigned int freechain;
 
-        struct mutex s_lock;
+	struct mutex s_lock;
 	struct clothesfs_super_block *super;
 };
 
@@ -85,7 +86,8 @@ struct clothesfs_inode_info {
 };
 
 
-void clothesfs_msg(struct super_block *sb, const char *level, const char *fmt, ...);
+void clothesfs_msg(struct super_block *sb,
+	const char *level, const char *fmt, ...);
 
 
 #endif /* !_CLOTHESFS_H */
